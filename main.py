@@ -1,4 +1,3 @@
-from __future__ import print_function
 import argparse
 import os
 import random
@@ -13,6 +12,8 @@ import torch.nn.functional as F
 import numpy as np
 import time
 import math
+import logging
+import sys
 from dataloader import listfile as lt
 from dataloader import DataLoader as DA
 from models import *
@@ -123,8 +124,17 @@ def adjust_learning_rate(optimizer, epoch, dataset="flow"):
 def main():
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+    logger = logging.getLogger('FS')
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(lineno)s: %(message)s')
+    fh = logging.StreamHandler(sys.stderr)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
     for k,v in vars(args).items():
-        print('%s - %s' % (k, v))
+        logger.info('%s - %s' % (k, v))
 
     if args.seed != 0:
         torch.manual_seed(args.seed)
@@ -147,7 +157,7 @@ def main():
     elif args.model == 'basic':
         model = basic(args.maxdisp)
     else:
-        print('no model')
+        logger.info('no model')
 
     if args.cuda:
         model = nn.DataParallel(model)
@@ -157,7 +167,7 @@ def main():
         state_dict = torch.load(args.loadmodel)
         model.load_state_dict(state_dict['state_dict'])
 
-    print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
+    logger.info('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.999))
 
@@ -165,7 +175,7 @@ def main():
     max_loss=1e10
     max_epo=0
     for epoch in range(1, args.epochs+1):
-        print('This is %d-th epoch' %(epoch))
+        logger.info('This is %d-th epoch' %(epoch))
         total_train_loss = 0
         adjust_learning_rate(optimizer,epoch)
 
@@ -174,24 +184,24 @@ def main():
             start_time = time.time()
 
             loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L)
-            print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
+            logger.info('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
             total_train_loss += loss
-        print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
+        logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
         ## TEST ##
         total_loss = 0
         for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
             loss = test(model, args, imgL,imgR, disp_L)
-            print('Iter %d test loss = %.3f' %(batch_idx, loss))
+            logger.info('Iter %d test loss = %.3f' %(batch_idx, loss))
             total_loss += loss
 
         total_loss /= len(TestImgLoader)
-        print('total test loss = %.3f' %(total_loss))
+        logger.info('total test loss = %.3f' %(total_loss))
 
         if total_loss < max_loss:
             max_loss = total_test_loss
             max_epo = epoch
-            print('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
+            logger.info('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
 
             if args.savemodel != '':
                 savefilename = args.savemodel + '/max_loss.tar'
@@ -201,7 +211,7 @@ def main():
                     'test_loss': total_loss,
                 }, savefilename)
 
-    print('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
+    logger.info('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
 
 if __name__ == '__main__':
    main()
