@@ -4,7 +4,7 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 import random
 from PIL import Image
-import readpfm as rp
+from dataloader import readpfm as rp
 import numpy as np
 import torchvision.transforms as transforms
 

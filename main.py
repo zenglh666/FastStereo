@@ -26,92 +26,92 @@ parser.add_argument('--dataset', default='flow',
                     help='datapath')
 parser.add_argument('--date', default='2015',
                     help='datapath')
-parser.add_argument('--datapath', default='dataset/',
+parser.add_argument('--datapath', default='/data/zenglh/scene_flow_dataset/',
                     help='datapath')
 parser.add_argument('--epochs', type=int, default=10,
                     help='number of epochs to train')
 parser.add_argument('--loadmodel', default= None,
                     help='load model')
-parser.add_argument('--savemodel', default='./',
+parser.add_argument('--savemodel', default='',
                     help='save model')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=0, metavar='S',
                     help='random seed (default: 0)')
-parser.add_argument('--batch-size', type=int, default=12,
+parser.add_argument('--batch-size', type=int, default=2,
                     help='batch size')
 parser.add_argument('--learning-rate', type=float, default=0.001,
                     help='learning rate')
 
-def train(imgL,imgR, disp_L):
-        model.train()
-        imgL   = Variable(torch.FloatTensor(imgL))
-        imgR   = Variable(torch.FloatTensor(imgR))   
-        disp_L = Variable(torch.FloatTensor(disp_L))
+def train(model, optimizer, args, imgL,imgR, disp_L):
+    model.train()
+    imgL   = Variable(torch.FloatTensor(imgL))
+    imgR   = Variable(torch.FloatTensor(imgR))   
+    disp_L = Variable(torch.FloatTensor(disp_L))
 
-        if args.cuda:
-            imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
+    if args.cuda:
+        imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
 
-       #---------
-        mask = disp_true < args.maxdisp
-        mask.detach_()
-        #----
-        optimizer.zero_grad()
-        
-        if args.model == 'stackhourglass':
-            output1, output2, output3 = model(imgL,imgR)
-            output1 = torch.squeeze(output1,1)
-            output2 = torch.squeeze(output2,1)
-            output3 = torch.squeeze(output3,1)
-            loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask], size_average=True) 
-            loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask], size_average=True) 
-            loss += F.smooth_l1_loss(output3[mask], disp_true[mask], size_average=True) 
-        elif args.model == 'basic':
-            output = model(imgL,imgR)
-            output = torch.squeeze(output,1)
-            loss = F.smooth_l1_loss(output[mask], disp_true[mask], size_average=True)
+   #---------
+    mask = disp_true < args.maxdisp
+    mask.detach_()
+    #----
+    optimizer.zero_grad()
+    
+    if args.model == 'stackhourglass':
+        output1, output2, output3 = model(imgL,imgR)
+        output1 = torch.squeeze(output1,1)
+        output2 = torch.squeeze(output2,1)
+        output3 = torch.squeeze(output3,1)
+        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask], size_average=True) 
+        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask], size_average=True) 
+        loss += F.smooth_l1_loss(output3[mask], disp_true[mask], size_average=True) 
+    elif args.model == 'basic':
+        output = model(imgL,imgR)
+        output = torch.squeeze(output,1)
+        loss = F.smooth_l1_loss(output[mask], disp_true[mask], size_average=True)
 
-        loss.backward()
-        optimizer.step()
+    loss.backward()
+    optimizer.step()
 
-        return loss.data[0]
+    return loss.data.item()
 
-def test(imgL, imgR, disp_true, dataset='flow'):
-        model.eval()
-        imgL   = Variable(torch.FloatTensor(imgL))
-        imgR   = Variable(torch.FloatTensor(imgR))   
-        if args.cuda:
-            imgL, imgR = imgL.cuda(), imgR.cuda()
+def test(model, args, imgL, imgR, disp_true, dataset='flow'):
+    model.eval()
+    imgL   = Variable(torch.FloatTensor(imgL))
+    imgR   = Variable(torch.FloatTensor(imgR))   
+    if args.cuda:
+        imgL, imgR = imgL.cuda(), imgR.cuda()
 
-        #---------
-        mask = disp_true < 192
-        #----
+    #---------
+    mask = disp_true < 192
+    #----
 
-        with torch.no_grad():
-            output3 = model(imgL,imgR)
+    with torch.no_grad():
+        output3 = model(imgL,imgR)
 
-        pred_disp = output3.data.cpu()
+    pred_disp = output3.data.cpu()
 
-        if dataset == "flow":
-            #computing EPE#
-            output = torch.squeeze(pred_disp, 1)[:,4:,:]
+    if dataset == "flow":
+        #computing EPE#
+        output = torch.squeeze(pred_disp, 1)[:,4:,:]
 
-            if len(disp_true[mask])==0:
-               loss = 0
-            else:
-               loss = torch.mean(torch.abs(output[mask]-disp_true[mask]))
-        elif dataset == "kitti":
-            #computing 3-px error#
-            true_disp = disp_true
-            index = np.argwhere(true_disp>0)
-            disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
-            correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*0.05)      
-            torch.cuda.empty_cache()
+        if len(disp_true[mask])==0:
+           loss = 0
+        else:
+           loss = torch.mean(torch.abs(output[mask]-disp_true[mask]))
+    elif dataset == "kitti":
+        #computing 3-px error#
+        true_disp = disp_true
+        index = np.argwhere(true_disp>0)
+        disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
+        correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*0.05)      
+        torch.cuda.empty_cache()
 
-            loss = 1-(float(torch.sum(correct))/float(len(index[0])))
-            loss *= 100
+        loss = 1-(float(torch.sum(correct))/float(len(index[0])))
+        loss *= 100
 
-        return loss
+    return loss
 
 def adjust_learning_rate(optimizer, epoch, dataset="flow"):
     if dataset == "kitti":
@@ -123,6 +123,8 @@ def adjust_learning_rate(optimizer, epoch, dataset="flow"):
 def main():
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
+    for k,v in args.items():
+        print('%s - %s' % (k, v))
 
     if args.seed != 0:
         torch.manual_seed(args.seed)
@@ -171,7 +173,7 @@ def main():
         for batch_idx, (imgL_crop, imgR_crop, disp_crop_L) in enumerate(TrainImgLoader):
             start_time = time.time()
 
-            loss = train(imgL_crop,imgR_crop, disp_crop_L)
+            loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L)
             print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
             total_train_loss += loss
         print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
@@ -179,7 +181,7 @@ def main():
         ## TEST ##
         total_loss = 0
         for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
-            loss = test(imgL,imgR, disp_L)
+            loss = test(model, args, imgL,imgR, disp_L)
             print('Iter %d test loss = %.3f' %(batch_idx, loss))
             total_loss += loss
 
@@ -191,12 +193,13 @@ def main():
             max_epo = epoch
             print('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
 
-            savefilename = args.savemodel + '/max_loss.tar'
-            torch.save({
-                'epoch': epoch,
-                'state_dict': model.state_dict(),
-                'test_loss': total_loss,
-            }, savefilename)
+            if args.savemodel != '':
+                savefilename = args.savemodel + '/max_loss.tar'
+                torch.save({
+                    'epoch': epoch,
+                    'state_dict': model.state_dict(),
+                    'test_loss': total_loss,
+                }, savefilename)
 
     print('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
 
