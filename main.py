@@ -123,7 +123,7 @@ def adjust_learning_rate(optimizer, epoch, dataset="flow"):
 def main():
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
-    for k,v in args.items():
+    for k,v in vars(args).items():
         print('%s - %s' % (k, v))
 
     if args.seed != 0:
