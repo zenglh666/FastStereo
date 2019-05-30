@@ -33,17 +33,17 @@ class hourglass(nn.Module):
         out  = self.conv1(x) #in:1/4 out:1/8
         pre  = self.conv2(out) #in:1/8 out:1/8
         if postsqu is not None:
-           pre = F.relu(pre + postsqu, inplace=True)
+            pre = F.relu(pre + postsqu, inplace=True)
         else:
-           pre = F.relu(pre, inplace=True)
+            pre = F.relu(pre, inplace=True)
 
         out  = self.conv3(pre) #in:1/8 out:1/16
         out  = self.conv4(out) #in:1/16 out:1/16
 
         if presqu is not None:
-           post = F.relu(self.conv5(out)+presqu, inplace=True) #in:1/16 out:1/8
+            post = F.relu(self.conv5(out)+presqu, inplace=True) #in:1/16 out:1/8
         else:
-           post = F.relu(self.conv5(out)+pre, inplace=True) 
+            post = F.relu(self.conv5(out)+pre, inplace=True) 
 
         out  = self.conv6(post)  #in:1/8 out:1/4
 
@@ -111,11 +111,11 @@ class PSMNet(nn.Module):
 
         for i in range(self.maxdisp/4):
             if i > 0 :
-             cost[:, :refimg_fea.size()[1], i, :,i:]   = refimg_fea[:,:,:,i:]
-             cost[:, refimg_fea.size()[1]:, i, :,i:] = targetimg_fea[:,:,:,:-i]
+                cost[:, :refimg_fea.size()[1], i, :,i:]   = refimg_fea[:,:,:,i:]
+                cost[:, refimg_fea.size()[1]:, i, :,i:] = targetimg_fea[:,:,:,:-i]
             else:
-             cost[:, :refimg_fea.size()[1], i, :,:]   = refimg_fea
-             cost[:, refimg_fea.size()[1]:, i, :,:]   = targetimg_fea
+                cost[:, :refimg_fea.size()[1], i, :,:]   = refimg_fea
+                cost[:, refimg_fea.size()[1]:, i, :,:]   = targetimg_fea
         cost = cost.contiguous()
 
         cost0 = self.dres0(cost)
@@ -149,9 +149,9 @@ class PSMNet(nn.Module):
         cost3 = F.upsample(cost3, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
         cost3 = torch.squeeze(cost3,1)
         pred3 = F.softmax(cost3,dim=1)
-	#For your information: This formulation 'softmax(c)' learned "similarity" 
-	#while 'softmax(-c)' learned 'matching cost' as mentioned in the paper.
-	#However, 'c' or '-c' do not affect the performance because feature-based cost volume provided flexibility.
+	    #For your information: This formulation 'softmax(c)' learned "similarity" 
+	    #while 'softmax(-c)' learned 'matching cost' as mentioned in the paper.
+	    #However, 'c' or '-c' do not affect the performance because feature-based cost volume provided flexibility.
         pred3 = disparityregression(self.maxdisp)(pred3)
 
         if self.training:
