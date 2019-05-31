@@ -31,6 +31,8 @@ parser.add_argument('--datapath', default='/data/zenglh/scene_flow_dataset/',
                     help='datapath')
 parser.add_argument('--epochs', type=int, default=10,
                     help='number of epochs to train')
+parser.add_argument('--log-steps', type=int, default=100,
+                    help='log-steps')
 parser.add_argument('--loadmodel', default= None,
                     help='load model')
 parser.add_argument('--savemodel', default='',
@@ -174,6 +176,7 @@ def main():
     start_full_time = time.time()
     max_loss=1e10
     max_epo=0
+    loss_avg = 0.
     for epoch in range(1, args.epochs+1):
         logger.info('This is %d-th epoch' %(epoch))
         total_train_loss = 0
@@ -184,7 +187,10 @@ def main():
             start_time = time.time()
 
             loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L)
-            logger.info('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
+            loss_avg = 0.99 * loss_avg + 0.01 * loss
+            if (batch_idx + 1) % args.log_steps == 0:
+                logger.info('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss_avg, time.time() - start_time))
+                start_time = time.time()
             total_train_loss += loss
         logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
