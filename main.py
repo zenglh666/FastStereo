@@ -192,7 +192,6 @@ def main():
                 logger.info('Iter %d training loss = %.3f , time = %.2f' %(batch_idx+1, loss_avg, time.time() - start_time))
                 start_time = time.time()
             total_train_loss += loss
-            break
         logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
         ## TEST ##
@@ -202,7 +201,6 @@ def main():
             if (batch_idx + 1) % args.log_steps == 0:
                 logger.info('Iter %d test loss = %.3f' %(batch_idx+1, loss))
             total_loss += loss
-            break
 
         total_loss /= len(TestImgLoader)
         logger.info('total test loss = %.3f' %(total_loss))
