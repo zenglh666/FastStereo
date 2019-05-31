@@ -195,18 +195,18 @@ def main():
         logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
         ## TEST ##
-        total_loss = 0
+        total_test_loss = 0
         for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
             loss = test(model, args, imgL,imgR, disp_L)
             if (batch_idx + 1) % args.log_steps == 0:
                 logger.info('Iter %d test loss = %.3f' %(batch_idx+1, loss))
-            total_loss += loss
+            total_test_loss += loss
 
-        total_loss /= len(TestImgLoader)
-        logger.info('total test loss = %.3f' %(total_loss))
+        total_test_loss /= len(TestImgLoader)
+        logger.info('total test loss = %.3f' %(total_test_loss))
 
-        if total_loss < max_loss:
-            max_loss = total_loss
+        if total_test_loss < max_loss:
+            max_loss = total_test_loss
             max_epo = epoch
             logger.info('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
 
@@ -215,7 +215,7 @@ def main():
                 torch.save({
                     'epoch': epoch,
                     'state_dict': model.state_dict(),
-                    'test_loss': total_loss,
+                    'test_loss': total_test_loss,
                 }, savefilename)
 
     logger.info('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
