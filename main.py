@@ -183,9 +183,8 @@ def main():
         adjust_learning_rate(optimizer,epoch)
 
         ## training ##
+        start_time = time.time()
         for batch_idx, (imgL_crop, imgR_crop, disp_crop_L) in enumerate(TrainImgLoader):
-            start_time = time.time()
-
             loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L)
             loss_avg = 0.99 * loss_avg + 0.01 * loss
             if (batch_idx + 1) % args.log_steps == 0:
