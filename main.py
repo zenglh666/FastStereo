@@ -189,23 +189,26 @@ def main():
             loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L)
             loss_avg = 0.99 * loss_avg + 0.01 * loss
             if (batch_idx + 1) % args.log_steps == 0:
-                logger.info('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss_avg, time.time() - start_time))
+                logger.info('Iter %d training loss = %.3f , time = %.2f' %(batch_idx+1, loss_avg, time.time() - start_time))
                 start_time = time.time()
             total_train_loss += loss
+            break
         logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
         ## TEST ##
         total_loss = 0
         for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
             loss = test(model, args, imgL,imgR, disp_L)
-            logger.info('Iter %d test loss = %.3f' %(batch_idx, loss))
+            if (batch_idx + 1) % args.log_steps == 0:
+                logger.info('Iter %d test loss = %.3f' %(batch_idx+1, loss))
             total_loss += loss
+            break
 
         total_loss /= len(TestImgLoader)
         logger.info('total test loss = %.3f' %(total_loss))
 
         if total_loss < max_loss:
-            max_loss = total_test_loss
+            max_loss = total_loss
             max_epo = epoch
             logger.info('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
 

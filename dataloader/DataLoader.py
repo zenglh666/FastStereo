@@ -35,9 +35,6 @@ class ImageFloder(data.Dataset):
         left_img = self.loader(left)
         right_img = self.loader(right)
         dataL, scaleL = self.dploader(disp_L)
-        dataL = np.ascontiguousarray(dataL,dtype=np.float32)
-        if self.dataset == "kitti":
-            dataL /= 256
 
         processed = transforms.Compose([
             transforms.ToTensor(),
@@ -54,20 +51,25 @@ class ImageFloder(data.Dataset):
             left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
 
+            dataL = np.ascontiguousarray(dataL,dtype=np.float32)
             dataL = dataL[y1:y1 + th, x1:x1 + tw]
 
             left_img   = processed(left_img)
             right_img  = processed(right_img)
         else:
-           w, h = left_img.size
+            w, h = left_img.size
 
-           left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
-           right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+            left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+            right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
 
-           dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
+            if self.dataset == 'kitti':
+                dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
+                dataL = np.ascontiguousarray(dataL,dtype=np.float32) / 256
+            elif self.dataset == "flow":
+                dataL = np.ascontiguousarray(dataL,dtype=np.float32)
 
-           left_img   = processed(left_img)
-           right_img  = processed(right_img)
+            left_img   = processed(left_img)
+            right_img  = processed(right_img)
 
         return left_img, right_img, dataL
 
