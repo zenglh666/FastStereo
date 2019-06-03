@@ -30,7 +30,7 @@ def readPFM(file):
     else:
         endian = '>' # big-endian
 
-    data = np.fromfile(file, endian + 'f')
+    data = np.frombuffer(file.read(), endian + 'f')
     shape = (height, width, 3) if color else (height, width)
 
     data = np.reshape(data, shape)
