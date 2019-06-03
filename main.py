@@ -137,11 +137,16 @@ def main():
     savepath = os.path.join(args.savedir, args.savemodel)
     if not os.path.exists(savepath):
         os.makedirs(savepath)
+    log_file = os.path.join(savepath, 'run.log')
 
     logger = logging.getLogger('FS')
     logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(lineno)s: %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(filename)s - %(lineno)s: %(message)s')
     fh = logging.StreamHandler(sys.stderr)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    fh = logging.FileHandler(log_file)
     fh.setLevel(logging.INFO)
     fh.setFormatter(formatter)
     logger.addHandler(fh)
@@ -158,11 +163,11 @@ def main():
 
     TrainImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(train_left_img, train_right_img, train_left_disp, training=True, with_cache=args.with_cache), 
-        batch_size=args.batch_size, shuffle=True, num_workers=8, drop_last=False)
+        batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(test_left_img, test_right_img, test_left_disp, training=False, with_cache=args.with_cache), 
-        batch_size=args.batch_size, shuffle=False, num_workers=4, drop_last=False)
+        batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
 
     if args.model == 'stackhourglass':
