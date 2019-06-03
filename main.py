@@ -14,6 +14,7 @@ import time
 import math
 import logging
 import sys
+from datetime import datetime
 from dataloader import listfile as lt
 from dataloader import DataLoader as DA
 from models import *
@@ -29,12 +30,16 @@ parser.add_argument('--date', default='2015',
                     help='datapath')
 parser.add_argument('--datapath', default='/data/zenglh/scene_flow_dataset/',
                     help='datapath')
+parser.add_argument('--with-cache', type=bool, default=False,
+                    help='with-cache')
 parser.add_argument('--epochs', type=int, default=10,
                     help='number of epochs to train')
 parser.add_argument('--log-steps', type=int, default=100,
                     help='log-steps')
 parser.add_argument('--loadmodel', default= None,
                     help='load model')
+parser.add_argument('--savedir', default='/data/zenglh/FastStereo/results',
+                    help='save model')
 parser.add_argument('--savemodel', default='',
                     help='save model')
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -66,13 +71,13 @@ def train(model, optimizer, args, imgL,imgR, disp_L):
         output1 = torch.squeeze(output1,1)
         output2 = torch.squeeze(output2,1)
         output3 = torch.squeeze(output3,1)
-        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask], size_average=True) 
-        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask], size_average=True) 
-        loss += F.smooth_l1_loss(output3[mask], disp_true[mask], size_average=True) 
+        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask]) 
+        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask]) 
+        loss += F.smooth_l1_loss(output3[mask], disp_true[mask]) 
     elif args.model == 'basic':
         output = model(imgL,imgR)
         output = torch.squeeze(output,1)
-        loss = F.smooth_l1_loss(output[mask], disp_true[mask], size_average=True)
+        loss = F.smooth_l1_loss(output[mask], disp_true[mask])
 
     loss.backward()
     optimizer.step()
@@ -126,6 +131,12 @@ def adjust_learning_rate(optimizer, epoch, dataset="flow"):
 def main():
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
+    if args.savemodel == "":
+        timestr =  datetime.now().isoformat().replace(':','-').replace('.','MS')
+        args.savemodel = timestr
+    savepath = os.path.join(args.savedir, args.savemodel)
+    if not os.path.exists(savepath):
+        os.makedirs(savepath)
 
     logger = logging.getLogger('FS')
     logger.setLevel(logging.INFO)
@@ -146,11 +157,11 @@ def main():
     train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = lt.list_flow_file(args.datapath)
 
     TrainImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(train_left_img, train_right_img, train_left_disp, True), 
+        DA.ImageFloder(train_left_img, train_right_img, train_left_disp, training=True, with_cache=args.with_cache), 
         batch_size=args.batch_size, shuffle=True, num_workers=8, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(test_left_img, test_right_img, test_left_disp, False), 
+        DA.ImageFloder(test_left_img, test_right_img, test_left_disp, training=False, with_cache=args.with_cache), 
         batch_size=args.batch_size, shuffle=False, num_workers=4, drop_last=False)
 
 
@@ -188,12 +199,14 @@ def main():
             loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L)
             loss_avg = 0.99 * loss_avg + 0.01 * loss
             if (batch_idx + 1) % args.log_steps == 0:
-                logger.info('Iter %d training loss = %.3f , time = %.2f' %(batch_idx+1, loss_avg, time.time() - start_time))
+                logger.info('Iter %d training loss = %.3f , time = %.2f' %(
+                    batch_idx + 1, loss_avg, time.time() - start_time))
                 start_time = time.time()
             total_train_loss += loss
         logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
         ## TEST ##
+        start_time = time.time()
         total_test_loss = 0
         for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
             loss = test(model, args, imgL,imgR, disp_L)
@@ -202,20 +215,20 @@ def main():
             total_test_loss += loss
 
         total_test_loss /= len(TestImgLoader)
-        logger.info('total test loss = %.3f' %(total_test_loss))
+        logger.info('total test loss = %.3f, per example time = %.2f' % (
+            total_test_loss, (time.time() - start_time) / len(TestImgLoader)))
 
         if total_test_loss < max_loss:
             max_loss = total_test_loss
             max_epo = epoch
-            logger.info('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
 
-            if args.savemodel != '':
-                savefilename = args.savemodel + '/max_loss.tar'
-                torch.save({
-                    'epoch': epoch,
-                    'state_dict': model.state_dict(),
-                    'test_loss': total_test_loss,
-                }, savefilename)
+            savefilename = os.path.join(savepath, 'max_loss.tar')
+            torch.save({
+                'epoch': epoch,
+                'state_dict': model.state_dict(),
+                'test_loss': total_test_loss,
+            }, savefilename)
+        logger.info('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
 
     logger.info('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
 

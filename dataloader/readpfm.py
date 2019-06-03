@@ -2,9 +2,7 @@ import re
 import numpy as np
  
 
-def readPFM(filename):
-    file = open(filename, 'rb')
-
+def readPFM(file):
     color = None
     width = None
     height = None
