@@ -93,11 +93,11 @@ def list_flow_file(filepath):
 
 
 def list_kitti_file(filepath, date):
-    if data == "2015":
+    if date == "2015":
         left_fold  = 'image_2'
         right_fold = 'image_3'
         disp_L = 'disp_occ_0'
-    elif data == "2012":
+    elif date == "2012":
         left_fold  = 'colored_0'
         right_fold = 'colored_1'
         disp_L   = 'disp_occ'

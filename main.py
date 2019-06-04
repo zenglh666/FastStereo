@@ -51,6 +51,16 @@ parser.add_argument('--batch-size', type=int, default=2,
 parser.add_argument('--learning-rate', type=float, default=0.001,
                     help='learning rate')
 
+def process(img, cuda):
+    img = img.transpose(1,3).transpose(2,3)
+    mean = torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+    std = torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+    if cuda:
+        mean = mean.cuda()
+        std = std.cuda()
+    img = img.div(255).sub(mean).div(std)
+    return img
+
 def train(model, optimizer, args, imgL,imgR, disp_L):
     model.train()
     imgL   = Variable(torch.FloatTensor(imgL))
@@ -60,7 +70,9 @@ def train(model, optimizer, args, imgL,imgR, disp_L):
     if args.cuda:
         imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
 
-   #---------
+    imgL = process(imgL, args.cuda)
+    imgR = process(imgR, args.cuda)
+    #---------
     mask = disp_true < args.maxdisp
     mask.detach_()
     #----
@@ -91,6 +103,8 @@ def test(model, args, imgL, imgR, disp_true, dataset='flow'):
     if args.cuda:
         imgL, imgR = imgL.cuda(), imgR.cuda()
 
+    imgL = process(imgL, args.cuda)
+    imgR = process(imgR, args.cuda)
     #---------
     mask = disp_true < 192
     #----
@@ -159,14 +173,17 @@ def main():
         if args.cuda:
             torch.cuda.manual_seed(args.seed)
 
-    train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = lt.list_flow_file(args.datapath)
+    if args.dataset == "flow":
+        train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = lt.list_flow_file(args.datapath)
+    else:
+        train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = lt.list_kitti_file(args.datapath, args.date)
 
     TrainImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(train_left_img, train_right_img, train_left_disp, training=True, with_cache=args.with_cache), 
+        DA.ImageFloder(train_left_img, train_right_img, train_left_disp, training=True, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(test_left_img, test_right_img, test_left_disp, training=False, with_cache=args.with_cache), 
+        DA.ImageFloder(test_left_img, test_right_img, test_left_disp, training=False, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
 

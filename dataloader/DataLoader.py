@@ -1,7 +1,6 @@
 import os
 import torch
 import torch.utils.data as data
-import torchvision.transforms as transforms
 import random
 from PIL import Image
 from io import BytesIO
@@ -9,14 +8,15 @@ from dataloader import readpfm as rp
 import numpy as np
 
 class ImageFloder(data.Dataset):
-    __imagenet_stats = {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}
-
     def __init__(self, left, right, left_disparity, training, with_cache=False, dataset='flow'):
         self.left = left
         self.right = right
         self.disp_L = left_disparity
         self.loader = lambda path: Image.open(path).convert('RGB')
-        self.dploader = lambda path: rp.readPFM(path)
+        if dataset == 'flow':
+            self.dploader = lambda path: rp.readPFM(path)
+        else:
+            self.dploader = lambda path: Image.open(path)
         self.training = training
 
         self.with_cache = with_cache
@@ -60,15 +60,10 @@ class ImageFloder(data.Dataset):
         disp_L = BytesIO(disp_L)
         left_img = self.loader(left)
         right_img = self.loader(right)
-        dataL, scaleL = self.dploader(disp_L)
+        dataL = self.dploader(disp_L)
 
-        processed = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(**self.__imagenet_stats)]
-        )
-
+        w, h = left_img.size
         if self.training:  
-            w, h = left_img.size
             th, tw = 256, 512
  
             x1 = random.randint(0, w - tw)
@@ -79,12 +74,7 @@ class ImageFloder(data.Dataset):
 
             dataL = np.ascontiguousarray(dataL,dtype=np.float32)
             dataL = dataL[y1:y1 + th, x1:x1 + tw]
-
-            left_img   = processed(left_img)
-            right_img  = processed(right_img)
         else:
-            w, h = left_img.size
-
             left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
             right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
 
@@ -94,8 +84,9 @@ class ImageFloder(data.Dataset):
             elif self.dataset == "flow":
                 dataL = np.ascontiguousarray(dataL,dtype=np.float32)
 
-            left_img   = processed(left_img)
-            right_img  = processed(right_img)
+        w, h = left_img.size
+        left_img   = np.array(left_img.getdata(), dtype=np.float32).reshape(h, w, 3)
+        right_img  = np.array(right_img.getdata(), dtype=np.float32).reshape(h, w, 3)
 
         return left_img, right_img, dataL
 
