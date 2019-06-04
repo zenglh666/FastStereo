@@ -113,6 +113,6 @@ def list_kitti_file(filepath, date):
 
     left_val  = [os.path.join(filepath, left_fold, img) for img in val]
     right_val = [os.path.join(filepath, right_fold, img) for img in val]
-    disp_val_L = [os.path.join(filepath, right_fold, img) for img in train]
+    disp_val_L = [os.path.join(filepath, right_fold, img) for img in val]
 
     return left_train, right_train, disp_train_L, left_val, right_val, disp_val_L

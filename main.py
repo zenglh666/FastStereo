@@ -63,15 +63,14 @@ def process(img, cuda):
 
 def train(model, optimizer, args, imgL,imgR, disp_L):
     model.train()
-    imgL   = Variable(torch.FloatTensor(imgL))
-    imgR   = Variable(torch.FloatTensor(imgR))   
-    disp_L = Variable(torch.FloatTensor(disp_L))
 
     if args.cuda:
         imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
 
     imgL = process(imgL, args.cuda)
     imgR = process(imgR, args.cuda)
+    if args.dataset == 'kitti':
+        disp_L = disp_L.div(256)
     #---------
     mask = disp_true < args.maxdisp
     mask.detach_()
@@ -80,6 +79,7 @@ def train(model, optimizer, args, imgL,imgR, disp_L):
     
     if args.model == 'stackhourglass':
         output1, output2, output3 = model(imgL,imgR)
+        logger = logging.getLogger('FS')
         output1 = torch.squeeze(output1,1)
         output2 = torch.squeeze(output2,1)
         output3 = torch.squeeze(output3,1)
@@ -96,42 +96,42 @@ def train(model, optimizer, args, imgL,imgR, disp_L):
 
     return loss.data.item()
 
-def test(model, args, imgL, imgR, disp_true, dataset='flow'):
+def test(model, args, imgL, imgR, disp_true):
     model.eval()
-    imgL   = Variable(torch.FloatTensor(imgL))
-    imgR   = Variable(torch.FloatTensor(imgR))   
+
     if args.cuda:
-        imgL, imgR = imgL.cuda(), imgR.cuda()
+        imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_true.cuda()
 
     imgL = process(imgL, args.cuda)
     imgR = process(imgR, args.cuda)
-    #---------
-    mask = disp_true < 192
-    #----
+    if args.dataset == 'kitti':
+        disp_true = disp_true.div(256)
 
     with torch.no_grad():
         output3 = model(imgL,imgR)
 
-    pred_disp = output3.data.cpu()
+    pred_disp = output3
 
-    if dataset == "flow":
+    if args.dataset == "flow":
         #computing EPE#
+        disp_true = disp_true[:,4:,:]
+        mask = disp_true < 192
         output = torch.squeeze(pred_disp, 1)[:,4:,:]
 
         if len(disp_true[mask])==0:
            loss = 0
         else:
-           loss = torch.mean(torch.abs(output[mask]-disp_true[mask]))
-    elif dataset == "kitti":
+           loss = torch.mean(torch.abs(output[mask]-disp_true[mask])).item()
+    elif args.dataset == "kitti":
         #computing 3-px error#
-        true_disp = disp_true
-        index = np.argwhere(true_disp>0)
-        disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(true_disp[index[0][:], index[1][:], index[2][:]]-pred_disp[index[0][:], index[1][:], index[2][:]])
-        correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3)|(disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]]*0.05)      
-        torch.cuda.empty_cache()
+        logger = logging.getLogger('FS')
+        mask = disp_true > 0
+        pred_disp = torch.squeeze(pred_disp, 1)
+        disp = torch.abs(disp_true - pred_disp)
+        correct = ((disp < 3) | (disp < disp_true * 0.05))
 
-        loss = 1-(float(torch.sum(correct))/float(len(index[0])))
-        loss *= 100
+        loss = torch.sum(correct[mask]).item() / torch.sum(mask).item()
+        loss = (1 - loss) * 100
 
     return loss
 

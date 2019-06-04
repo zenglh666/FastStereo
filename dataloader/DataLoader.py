@@ -4,8 +4,44 @@ import torch.utils.data as data
 import random
 from PIL import Image
 from io import BytesIO
-from dataloader import readpfm as rp
 import numpy as np
+import re
+ 
+
+def readPFM(file):
+    color = None
+    width = None
+    height = None
+    scale = None
+    endian = None
+
+    header = file.readline().decode().rstrip()
+    if header == 'PF':
+        color = True
+    elif header == 'Pf':
+        color = False
+    else:
+        raise Exception('Not a PFM file.')
+
+    dim_match = re.match(r'^(\d+)\s(\d+)\s$', file.readline().decode())
+    if dim_match:
+        width, height = map(int, dim_match.groups())
+    else:
+        raise Exception('Malformed PFM header.')
+
+    scale = float(file.readline().decode().rstrip())
+    if scale < 0: # little-endian
+        endian = '<'
+        scale = -scale
+    else:
+        endian = '>' # big-endian
+
+    data = np.frombuffer(file.read(), endian + 'f')
+    shape = (height, width, 3) if color else (height, width)
+
+    data = np.reshape(data, shape)
+    data = np.flipud(data)
+    return data
 
 class ImageFloder(data.Dataset):
     def __init__(self, left, right, left_disparity, training, with_cache=False, dataset='flow'):
@@ -14,9 +50,9 @@ class ImageFloder(data.Dataset):
         self.disp_L = left_disparity
         self.loader = lambda path: Image.open(path).convert('RGB')
         if dataset == 'flow':
-            self.dploader = lambda path: rp.readPFM(path)
+            self.dploader = lambda path: readPFM(path)
         else:
-            self.dploader = lambda path: Image.open(path)
+            self.dploader = lambda path: Image.open(path).convert('I')
         self.training = training
 
         self.with_cache = with_cache
@@ -61,32 +97,31 @@ class ImageFloder(data.Dataset):
         left_img = self.loader(left)
         right_img = self.loader(right)
         dataL = self.dploader(disp_L)
+        dataL = np.ascontiguousarray(dataL, dtype=np.float32)
 
-        w, h = left_img.size
-        if self.training:  
+        if self.training:
             th, tw = 256, 512
- 
+            w, h = left_img.size
             x1 = random.randint(0, w - tw)
             y1 = random.randint(0, h - th)
 
             left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
 
-            dataL = np.ascontiguousarray(dataL,dtype=np.float32)
             dataL = dataL[y1:y1 + th, x1:x1 + tw]
         else:
+            w, h = left_img.size
             left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
             right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
 
-            if self.dataset == 'kitti':
-                dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
-                dataL = np.ascontiguousarray(dataL,dtype=np.float32) / 256
-            elif self.dataset == "flow":
-                dataL = np.ascontiguousarray(dataL,dtype=np.float32)
+            h, w = dataL.shape
+            dataL = np.pad(dataL, ((max(self.desire_h - h, 0), 0), (max(self.desire_w - w, 0), 0)), 'constant')
+            h, w = dataL.shape
+            dataL = dataL[h-self.desire_h:h, w-self.desire_w:w]
 
         w, h = left_img.size
-        left_img   = np.array(left_img.getdata(), dtype=np.float32).reshape(h, w, 3)
-        right_img  = np.array(right_img.getdata(), dtype=np.float32).reshape(h, w, 3)
+        left_img   = np.array(left_img, dtype=np.float32).reshape(h, w, 3)
+        right_img  = np.array(right_img, dtype=np.float32).reshape(h, w, 3)
 
         return left_img, right_img, dataL
 
