@@ -52,7 +52,7 @@ class ImageFloder(data.Dataset):
         if dataset == 'flow':
             self.dploader = lambda path: readPFM(path)
         else:
-            self.dploader = lambda path: Image.open(path).convert('I')
+            self.dploader = lambda path: Image.open(path)
         self.training = training
 
         self.with_cache = with_cache
@@ -97,7 +97,6 @@ class ImageFloder(data.Dataset):
         left_img = self.loader(left)
         right_img = self.loader(right)
         dataL = self.dploader(disp_L)
-        dataL = np.ascontiguousarray(dataL, dtype=np.float32)
 
         if self.training:
             th, tw = 256, 512
@@ -108,21 +107,21 @@ class ImageFloder(data.Dataset):
             left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
 
-            dataL = dataL[y1:y1 + th, x1:x1 + tw]
+            if self.dataset == 'kitti':
+                dataL = dataL.crop((x1, y1, x1 + tw, y1 + th))
+            else:
+                dataL = dataL[y1:y1 + th, x1:x1 + tw]
         else:
             w, h = left_img.size
             left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
             right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
 
-            h, w = dataL.shape
-            dataL = np.pad(dataL, ((max(self.desire_h - h, 0), 0), (max(self.desire_w - w, 0), 0)), 'constant')
-            h, w = dataL.shape
-            dataL = dataL[h-self.desire_h:h, w-self.desire_w:w]
+            if self.dataset == 'kitti':
+                dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
 
-        w, h = left_img.size
-        left_img   = np.array(left_img, dtype=np.float32).reshape(h, w, 3)
-        right_img  = np.array(right_img, dtype=np.float32).reshape(h, w, 3)
-
+        left_img   = np.array(left_img, dtype=np.float32)
+        right_img  = np.array(right_img, dtype=np.float32)
+        dataL = np.array(dataL, dtype=np.float32)
         return left_img, right_img, dataL
 
     def __len__(self):

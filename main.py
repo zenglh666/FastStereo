@@ -61,16 +61,16 @@ def process(img, cuda):
     img = img.div(255).sub(mean).div(std)
     return img
 
-def train(model, optimizer, args, imgL,imgR, disp_L):
+def train(model, optimizer, args, imgL,imgR, disp_true):
     model.train()
 
     if args.cuda:
-        imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
+        imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_true.cuda()
 
     imgL = process(imgL, args.cuda)
     imgR = process(imgR, args.cuda)
     if args.dataset == 'kitti':
-        disp_L = disp_L.div(256)
+        disp_true = disp_true.div(256)
     #---------
     mask = disp_true < args.maxdisp
     mask.detach_()
@@ -114,8 +114,7 @@ def test(model, args, imgL, imgR, disp_true):
 
     if args.dataset == "flow":
         #computing EPE#
-        disp_true = disp_true[:,4:,:]
-        mask = disp_true < 192
+        mask = disp_true < args.maxdisp
         output = torch.squeeze(pred_disp, 1)[:,4:,:]
 
         if len(disp_true[mask])==0:
@@ -125,7 +124,7 @@ def test(model, args, imgL, imgR, disp_true):
     elif args.dataset == "kitti":
         #computing 3-px error#
         logger = logging.getLogger('FS')
-        mask = disp_true > 0
+        mask = (disp_true > 0) & (disp_true < args.maxdisp)
         pred_disp = torch.squeeze(pred_disp, 1)
         disp = torch.abs(disp_true - pred_disp)
         correct = ((disp < 3) | (disp < disp_true * 0.05))
