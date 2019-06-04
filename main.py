@@ -126,10 +126,10 @@ def test(model, args, imgL, imgR, disp_true):
         logger = logging.getLogger('FS')
         mask = (disp_true > 0) & (disp_true < args.maxdisp)
         pred_disp = torch.squeeze(pred_disp, 1)
-        disp = torch.abs(disp_true - pred_disp)
-        correct = ((disp < 3) | (disp < disp_true * 0.05))
+        disp = torch.abs(disp_true[mask] - pred_disp[mask])
+        correct = ((disp < 3) | (disp < disp_true[mask] * 0.05))
 
-        loss = torch.sum(correct[mask]).item() / torch.sum(mask).item()
+        loss = torch.sum(correct).item() / torch.sum(mask).item()
         loss = (1 - loss) * 100
 
     return loss
