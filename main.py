@@ -72,8 +72,8 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
     #---------
-    mask = disp_true < args.maxdisp
-    mask.detach_()
+    mask = (disp_true > 0) & (disp_true < args.maxdisp)
+    mask.detach()
     #----
     optimizer.zero_grad()
     

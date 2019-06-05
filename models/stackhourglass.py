@@ -2,7 +2,6 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 import torch.utils.data
-from torch.autograd import Variable
 import torch.nn.functional as F
 import math
 from .submodule import *
@@ -83,6 +82,8 @@ class PSMNet(nn.Module):
                                       nn.ReLU(inplace=True),
                                       nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False))
 
+        self.disparityregression = disparityregression(self.maxdisp)
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -107,7 +108,9 @@ class PSMNet(nn.Module):
 
 
         #matching
-        cost = Variable(torch.FloatTensor(refimg_fea.size()[0], refimg_fea.size()[1]*2, self.maxdisp//4,  refimg_fea.size()[2],  refimg_fea.size()[3]).zero_()).cuda()
+        cost = torch.zeros(
+            [refimg_fea.size()[0], refimg_fea.size()[1]*2, self.maxdisp//4,  refimg_fea.size()[2],  refimg_fea.size()[3]],
+            device=refimg_fea.device)
 
         for i in range(self.maxdisp//4):
             if i > 0 :
@@ -140,11 +143,11 @@ class PSMNet(nn.Module):
 
             cost1 = torch.squeeze(cost1,1)
             pred1 = F.softmax(cost1,dim=1)
-            pred1 = disparityregression(self.maxdisp)(pred1)
+            pred1 = self.disparityregression(pred1)
 
             cost2 = torch.squeeze(cost2,1)
             pred2 = F.softmax(cost2,dim=1)
-            pred2 = disparityregression(self.maxdisp)(pred2)
+            pred2 = self.disparityregression(pred2)
 
         cost3 = F.interpolate(cost3, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
         cost3 = torch.squeeze(cost3,1)
@@ -152,7 +155,7 @@ class PSMNet(nn.Module):
         #For your information: This formulation 'softmax(c)' learned "similarity" 
         #while 'softmax(-c)' learned 'matching cost' as mentioned in the paper.
         #However, 'c' or '-c' do not affect the performance because feature-based cost volume provided flexibility.
-        pred3 = disparityregression(self.maxdisp)(pred3)
+        pred3 = self.disparityregression(pred3)
 
         if self.training:
             return pred1, pred2, pred3
