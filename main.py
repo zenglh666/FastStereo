@@ -34,6 +34,8 @@ parser.add_argument('--with-cache', type=bool, default=False,
                     help='with-cache')
 parser.add_argument('--epochs', type=int, default=10,
                     help='number of epochs to train')
+parser.add_argument('--decay-epochs', type=int, default=200,
+                    help='number of epochs to train')
 parser.add_argument('--log-steps', type=int, default=100,
                     help='log-steps')
 parser.add_argument('--loadmodel', default= None,
@@ -136,9 +138,9 @@ def test(model, args, imgL, imgR, disp_true):
 
     return loss
 
-def adjust_learning_rate(optimizer, epoch, dataset="flow"):
-    if dataset == "kitti":
-        if epoch > 200:
+def adjust_learning_rate(optimizer, epoch, args):
+    if args.dataset == "kitti":
+        if epoch % args.decay_epochs == 0:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = param_group['lr'] * 0.1
 
@@ -214,7 +216,7 @@ def main():
     for epoch in range(1, args.epochs+1):
         logger.info('This is %d-th epoch' %(epoch))
         total_train_loss = 0
-        adjust_learning_rate(optimizer,epoch)
+        adjust_learning_rate(optimizer, epoch, args)
 
         ## training ##
         start_time = time.time()
