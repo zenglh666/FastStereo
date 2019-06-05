@@ -56,11 +56,11 @@ class matchshifted(nn.Module):
             left_t = right_t.cuda(device=right.device)
 
         shifted_left  = F.pad(
-            torch.index_select(left, 3, ),
+            torch.index_select(left, 3, left_t),
             (shift,0,0,0)
         )
         shifted_right = F.pad(
-            torch.index_select(right, 3, ),
+            torch.index_select(right, 3, right_t),
             (shift,0,0,0)
         )
         out = torch.cat((shifted_left,shifted_right),1).view(batch,filters*2,1,height,width)

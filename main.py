@@ -50,6 +50,8 @@ parser.add_argument('--batch-size', type=int, default=2,
                     help='batch size')
 parser.add_argument('--learning-rate', type=float, default=0.001,
                     help='learning rate')
+parser.add_argument('--weight-decay', type=float, default=0.0,
+                    help='learning rate')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3)
@@ -74,22 +76,22 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     #---------
     mask = (disp_true > 0) & (disp_true < args.maxdisp)
     mask.detach()
+    disp_true = disp_true[mask]
     #----
     optimizer.zero_grad()
     
     if args.model == 'stackhourglass':
         output1, output2, output3 = model(imgL,imgR)
-        logger = logging.getLogger('FS')
         output1 = torch.squeeze(output1,1)
         output2 = torch.squeeze(output2,1)
         output3 = torch.squeeze(output3,1)
-        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true[mask]) 
-        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true[mask]) 
-        loss += F.smooth_l1_loss(output3[mask], disp_true[mask]) 
+        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
+        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
+        loss += F.smooth_l1_loss(output3[mask], disp_true) 
     elif args.model == 'basic':
         output = model(imgL,imgR)
         output = torch.squeeze(output,1)
-        loss = F.smooth_l1_loss(output[mask], disp_true[mask])
+        loss = F.smooth_l1_loss(output[mask], disp_true)
 
     loss.backward()
     optimizer.step()
@@ -123,13 +125,13 @@ def test(model, args, imgL, imgR, disp_true):
            loss = torch.mean(torch.abs(output[mask]-disp_true[mask])).item()
     elif args.dataset == "kitti":
         #computing 3-px error#
-        logger = logging.getLogger('FS')
         mask = (disp_true > 0) & (disp_true < args.maxdisp)
+        disp_true = disp_true[mask]
         pred_disp = torch.squeeze(pred_disp, 1)
-        disp = torch.abs(disp_true[mask] - pred_disp[mask])
-        correct = ((disp < 3) | (disp < disp_true[mask] * 0.05))
+        disp = torch.abs(disp_true - pred_disp[mask])
+        correct = (disp < 3) | (disp < disp_true * 0.05)
 
-        loss = torch.sum(correct).item() / torch.sum(mask).item()
+        loss = torch.sum(correct.float()).item() / torch.sum(mask.float()).item()
         loss = (1 - loss) * 100
 
     return loss
@@ -203,7 +205,7 @@ def main():
 
     logger.info('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
-    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.999))
+    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.999), weight_decay=args.weight_decay)
 
     start_full_time = time.time()
     max_loss=1e10
@@ -225,6 +227,7 @@ def main():
                 start_time = time.time()
             total_train_loss += loss
         logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
+        torch.cuda.empty_cache()
 
         ## TEST ##
         start_time = time.time()
@@ -238,6 +241,7 @@ def main():
         total_test_loss /= len(TestImgLoader)
         logger.info('total test loss = %.3f, per example time = %.2f' % (
             total_test_loss, (time.time() - start_time) / len(TestImgLoader)))
+        torch.cuda.empty_cache()
 
         if total_test_loss < max_loss:
             max_loss = total_test_loss
