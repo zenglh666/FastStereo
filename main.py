@@ -54,6 +54,8 @@ parser.add_argument('--learning-rate', type=float, default=0.001,
                     help='learning rate')
 parser.add_argument('--weight-decay', type=float, default=0.0,
                     help='learning rate')
+parser.add_argument('--optimizer', default='adam',
+                    help='learning rate')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3)
@@ -138,12 +140,6 @@ def test(model, args, imgL, imgR, disp_true):
 
     return loss
 
-def adjust_learning_rate(optimizer, epoch, args):
-    if args.dataset == "kitti":
-        if epoch % args.decay_epochs == 0:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = param_group['lr'] * 0.1
-
 
 def main():
     args = parser.parse_args()
@@ -207,7 +203,12 @@ def main():
 
     logger.info('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
-    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.999), weight_decay=args.weight_decay)
+    if args.optimizer == 'adam':
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.999), weight_decay=args.weight_decay)
+    elif args.optimizer == 'mom':
+        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
+
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.decay_epochs)
 
     start_full_time = time.time()
     max_loss=1e10
@@ -216,7 +217,7 @@ def main():
     for epoch in range(1, args.epochs+1):
         logger.info('This is %d-th epoch' %(epoch))
         total_train_loss = 0
-        adjust_learning_rate(optimizer, epoch, args)
+        scheduler.step()
 
         ## training ##
         start_time = time.time()
