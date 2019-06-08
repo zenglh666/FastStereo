@@ -72,15 +72,18 @@ class PSMNet(nn.Module):
 
         self.classif1 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
                                       nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False))
+                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False),
+                                      nn.Dropout(p=0.5, inplace=True))
 
         self.classif2 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
                                       nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False))
+                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False),
+                                      nn.Dropout(p=0.5, inplace=True))
 
         self.classif3 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
                                       nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False))
+                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False),
+                                      nn.Dropout(p=0.5, inplace=True))
 
         self.disparityregression = disparityregression(self.maxdisp)
 

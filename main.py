@@ -30,6 +30,8 @@ parser.add_argument('--date', default='2015',
                     help='datapath')
 parser.add_argument('--datapath', default='/data/zenglh/scene_flow_dataset/',
                     help='datapath')
+parser.add_argument('--datapath-ext', default='',
+                    help='datapath')
 parser.add_argument('--with-cache', type=bool, default=False,
                     help='with-cache')
 parser.add_argument('--epochs', type=int, default=10,
@@ -67,14 +69,22 @@ def process(img, cuda):
     img = img.div(255).sub(mean).div(std)
     return img
 
+def process2(img, cuda):
+    img = img.transpose(1,3).transpose(2,3)
+    mean = torch.mean(img)
+    img_mean = img - mean
+    std = torch.mean(img_mean * img_mean)
+    img = img / std
+    return img
+
 def train(model, optimizer, args, imgL,imgR, disp_true):
     model.train()
 
     if args.cuda:
         imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_true.cuda()
 
-    imgL = process(imgL, args.cuda)
-    imgR = process(imgR, args.cuda)
+    imgL = process2(imgL, args.cuda)
+    imgR = process2(imgR, args.cuda)
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
     #---------
@@ -108,8 +118,8 @@ def test(model, args, imgL, imgR, disp_true):
     if args.cuda:
         imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_true.cuda()
 
-    imgL = process(imgL, args.cuda)
-    imgR = process(imgR, args.cuda)
+    imgL = process2(imgL, args.cuda)
+    imgR = process2(imgR, args.cuda)
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
 
@@ -173,16 +183,39 @@ def main():
             torch.cuda.manual_seed(args.seed)
 
     if args.dataset == "flow":
-        train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = lt.list_flow_file(args.datapath)
+        trli, trri, trld, teli, teri, teld = lt.list_flow_file(args.datapath)
+
     else:
-        train_left_img, train_right_img, train_left_disp, test_left_img, test_right_img, test_left_disp = lt.list_kitti_file(args.datapath, args.date)
+        if args.datapath_ext == "":
+            trli, trri, trld, teli, teri, teld = lt.list_kitti_file(args.datapath, args.date)
+        else:
+            trli15, trri15, trld15, teli15, teri15, teld15 = lt.list_kitti_file(args.datapath, '2015')
+            trli12, trri12, trld12, teli12, teri12, teld12 = lt.list_kitti_file(args.datapath_ext, '2012')
+            if args.date == '2015':
+                teli, teri, teld = teli15, teri15, teld15
+                trli, trri, trld = trli15, trri15, trld15
+                trli.extend(trli12)
+                trli.extend(teli12)
+                trri.extend(trri12)
+                trri.extend(teri12)
+                trld.extend(trld12)
+                trld.extend(teld12)
+            else:
+                teli, teri, teld = teli12, teri12, teld12
+                trli, trri, trld = trli12, trri12, trld12
+                trli.extend(trli15)
+                trli.extend(teli15)
+                trri.extend(trri15)
+                trri.extend(teri15)
+                trld.extend(trld15)
+                trld.extend(teld15)
 
     TrainImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(train_left_img, train_right_img, train_left_disp, training=True, with_cache=args.with_cache, dataset=args.dataset), 
+        DA.ImageFloder(trli, trri, trld, training=True, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(test_left_img, test_right_img, test_left_disp, training=False, with_cache=args.with_cache, dataset=args.dataset), 
+        DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
 
@@ -204,7 +237,7 @@ def main():
     logger.info('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
     if args.optimizer == 'adam':
-        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.999), weight_decay=args.weight_decay)
+        optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     elif args.optimizer == 'mom':
         optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
 
