@@ -3,6 +3,7 @@ import torch.utils.data as data
 from PIL import Image
 import os
 import os.path
+import numpy as np
 
 IMG_EXTENSIONS = [
         '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -104,8 +105,17 @@ def list_kitti_file(filepath, date):
 
     image = [img for img in os.listdir(os.path.join(filepath, left_fold)) if img.find('_10') > -1]
 
-    train = image[:160]
-    val   = image[160:]
+    if date == '2015':
+        val_set = [1,3,6,20,26,35,38,41,43,44,49,60,67,70,81,84,89,97,109,119,122,123,
+            129,130,132,134,141,144,152,158,159,165,171,174,179,182, 184,186,187,196]
+        image = np.array(sorted(image))
+        val_bool = np.zeros_like(image, dtype=np.bool)
+        val_bool[val_set] = True
+        train = image[~val_bool]
+        val   = image[val_bool]
+    else:
+        train = image[:160]
+        val   = image[160:]
 
     left_train  = [os.path.join(filepath, left_fold, img) for img in train]
     right_train = [os.path.join(filepath, right_fold, img) for img in train]

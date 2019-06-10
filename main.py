@@ -94,7 +94,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     #----
     optimizer.zero_grad()
     
-    if args.model == 'stackhourglass':
+    if args.model == 'stackhourglass' or args.model == 'fast':
         output1, output2, output3 = model(imgL,imgR)
         output1 = torch.squeeze(output1,1)
         output2 = torch.squeeze(output2,1)
@@ -223,6 +223,8 @@ def main():
         model = stackhourglass(args.maxdisp)
     elif args.model == 'basic':
         model = basic(args.maxdisp)
+    elif args.model == 'fast':
+        model = fast(args.maxdisp)
     else:
         logger.info('no model')
 

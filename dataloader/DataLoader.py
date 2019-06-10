@@ -66,8 +66,8 @@ class ImageFloder(data.Dataset):
             self.desire_w = 960
             self.desire_h = 544
         elif dataset == "kitti":
-            self.desire_w = 1232
-            self.desire_h = 368
+            self.desire_w = 1248#1232
+            self.desire_h = 384#368
 
     def __getitem__(self, index):
         left  = self.left[index]
