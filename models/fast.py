@@ -6,84 +6,45 @@ import torch.nn.functional as F
 import math
 from .utils import *
 
-class hourglass(nn.Module):
-    def __init__(self, inplanes):
-        super(hourglass, self).__init__()
-
-        self.conv1 = nn.Sequential(convbn_3d(inplanes, inplanes*2, kernel_size=3, stride=2, pad=1),
-                                   nn.ReLU(inplace=True))
-
-        self.conv2 = convbn_3d(inplanes*2, inplanes*2, kernel_size=3, stride=1, pad=1)
-
-        self.conv3 = nn.Sequential(convbn_3d(inplanes*2, inplanes*2, kernel_size=3, stride=2, pad=1),
-                                   nn.ReLU(inplace=True))
-
-        self.conv4 = nn.Sequential(convbn_3d(inplanes*2, inplanes*2, kernel_size=3, stride=1, pad=1),
-                                   nn.ReLU(inplace=True))
-
-        self.conv5 = nn.Sequential(nn.ConvTranspose3d(inplanes*2, inplanes*2, kernel_size=3, padding=1, output_padding=1, stride=2,bias=False),
-                                   nn.BatchNorm3d(inplanes*2)) #+conv2
-
-        self.conv6 = nn.Sequential(nn.ConvTranspose3d(inplanes*2, inplanes, kernel_size=3, padding=1, output_padding=1, stride=2,bias=False),
-                                   nn.BatchNorm3d(inplanes)) #+x
-
-    def forward(self, x ,presqu, postsqu):
-        
-        out  = self.conv1(x) #in:1/4 out:1/8
-        pre  = self.conv2(out) #in:1/8 out:1/8
-        if postsqu is not None:
-            pre = F.relu(pre + postsqu, inplace=True)
-        else:
-            pre = F.relu(pre, inplace=True)
-
-        out  = self.conv3(pre) #in:1/8 out:1/16
-        out  = self.conv4(out) #in:1/16 out:1/16
-
-        if presqu is not None:
-            post = F.relu(self.conv5(out)+presqu, inplace=True) #in:1/16 out:1/8
-        else:
-            post = F.relu(self.conv5(out)+pre, inplace=True) 
-
-        out  = self.conv6(post)  #in:1/8 out:1/4
-
-        return out, pre, post
-
 class PSMNet(nn.Module):
-    def __init__(self, maxdisp):
+    def __init__(self, maxdisp, planes=64):
         super(PSMNet, self).__init__()
         self.maxdisp = maxdisp
+        inplanes = planes * 2
 
         self.feature_extraction = feature_extraction()
 
-        self.dres0 = nn.Sequential(convbn_3d(64, 32, 3, 1, 1),
-                                     nn.ReLU(inplace=True),
-                                     convbn_3d(32, 32, 3, 1, 1),
-                                     nn.ReLU(inplace=True))
+        self.dres0 = nn.Sequential(
+            nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+            nn.BatchNorm3d(planes),
+            nn.ReLU(inplace=True),
+            ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
+            ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
+        ) 
 
-        self.dres1 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
-                                   nn.ReLU(inplace=True),
-                                   convbn_3d(32, 32, 3, 1, 1)) 
+        self.unet_conv = nn.ModuleList()
+        inplanes = planes
+        for i in range(4):
+            outplanes = inplanes * 2
+            self.unet_conv.append(nn.Sequential(
+                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
+                nn.BatchNorm3d(outplanes),
+                nn.ReLU(inplace=True),
+                #ResBlock3D(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
+            ))
+            inplanes = outplanes
 
-        self.dres2 = hourglass(32)
-
-        self.dres3 = hourglass(32)
-
-        self.dres4 = hourglass(32)
-
-        self.classif1 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
-                                      nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False),
-                                      nn.Dropout(p=0.5, inplace=True))
-
-        self.classif2 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
-                                      nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False),
-                                      nn.Dropout(p=0.5, inplace=True))
-
-        self.classif3 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
-                                      nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False),
-                                      nn.Dropout(p=0.5, inplace=True))
+        self.unet_dconv = nn.ModuleList()
+        self.classifiers = nn.ModuleList()
+        for i in range(4):
+            outplanes = inplanes // 2
+            self.unet_dconv.append(nn.Sequential(
+                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
+                nn.BatchNorm3d(outplanes),
+                nn.ReLU(inplace=True)
+            ))
+            self.classifiers.append(nn.Conv3d(outplanes, 1, kernel_size=3, stride=2, padding=1, dilation=1, bias=False))
+            inplanes = outplanes
 
         self.disparityregression = disparityregression(self.maxdisp)
 
@@ -124,43 +85,30 @@ class PSMNet(nn.Module):
                 cost[:, refimg_fea.size()[1]:, i, :,:]   = targetimg_fea
         cost = cost.contiguous()
 
-        cost0 = self.dres0(cost)
-        cost0 = self.dres1(cost0) + cost0
-
-        out1, pre1, post1 = self.dres2(cost0, None, None) 
-        out1 = out1+cost0
-
-        out2, pre2, post2 = self.dres3(out1, pre1, post1) 
-        out2 = out2+cost0
-
-        out3, pre3, post3 = self.dres4(out2, pre1, post2) 
-        out3 = out3+cost0
-
-        cost1 = self.classif1(out1)
-        cost2 = self.classif2(out2) + cost1
-        cost3 = self.classif3(out3) + cost2
-
+        output = self.dres0(cost)
+        uoutput = [output]
+        for l in self.unet_conv:
+            output = l(output)
+            uoutput.append(output)
+            
+        uoutput.reverse()
+        doutput = []
+        for i, l in enumerate(self.unet_dconv):
+            output = l(output)
+            if i + 1 < len(uoutput):
+                output = output + uoutput[i+1]
+            doutput.append(output)
+        
+        doutput = doutput[-3:]
+        preds = []
+        for i, output in enumerate(doutput):
+            output = self.classifiers[i - 3](output)
+            output = F.interpolate(output, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
+            output = torch.squeeze(output, 1)
+            pred = F.softmax(output,dim=1)
+            pred = self.disparityregression(pred)
+            preds.append(pred)
         if self.training:
-            cost1 = F.interpolate(cost1, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
-            cost2 = F.interpolate(cost2, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
-
-            cost1 = torch.squeeze(cost1,1)
-            pred1 = F.softmax(cost1,dim=1)
-            pred1 = self.disparityregression(pred1)
-
-            cost2 = torch.squeeze(cost2,1)
-            pred2 = F.softmax(cost2,dim=1)
-            pred2 = self.disparityregression(pred2)
-
-        cost3 = F.interpolate(cost3, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
-        cost3 = torch.squeeze(cost3,1)
-        pred3 = F.softmax(cost3,dim=1)
-        #For your information: This formulation 'softmax(c)' learned "similarity" 
-        #while 'softmax(-c)' learned 'matching cost' as mentioned in the paper.
-        #However, 'c' or '-c' do not affect the performance because feature-based cost volume provided flexibility.
-        pred3 = self.disparityregression(pred3)
-
-        if self.training:
-            return pred1, pred2, pred3
+            return preds[0], preds[1], preds[2]
         else:
-            return pred3
+            return pred

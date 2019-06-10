@@ -50,7 +50,7 @@ class ImageFloder(data.Dataset):
         self.disp_L = left_disparity
         self.loader = lambda path: Image.open(path).convert('RGB')
         if dataset == 'flow':
-            self.dploader = lambda path: readPFM(path)
+            self.dploader = lambda path: Image.fromarray(readPFM(path).astype(np.float32))
         else:
             self.dploader = lambda path: Image.open(path)
         self.training = training
@@ -64,9 +64,9 @@ class ImageFloder(data.Dataset):
         self.dataset = dataset
         if dataset == "flow":
             self.desire_w = 960
-            self.desire_h = 544
+            self.desire_h = 576#544
         elif dataset == "kitti":
-            self.desire_w = 1248#1232
+            self.desire_w = 1280#1232
             self.desire_h = 384#368
 
     def __getitem__(self, index):
@@ -106,18 +106,12 @@ class ImageFloder(data.Dataset):
 
             left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
-
-            if self.dataset == 'kitti':
-                dataL = dataL.crop((x1, y1, x1 + tw, y1 + th))
-            else:
-                dataL = dataL[y1:y1 + th, x1:x1 + tw]
+            dataL = dataL.crop((x1, y1, x1 + tw, y1 + th))
         else:
             w, h = left_img.size
             left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
             right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
-
-            if self.dataset == 'kitti':
-                dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
+            dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
 
         left_img   = np.array(left_img, dtype=np.float32)
         right_img  = np.array(right_img, dtype=np.float32)

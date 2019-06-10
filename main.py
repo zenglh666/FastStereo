@@ -127,11 +127,11 @@ def test(model, args, imgL, imgR, disp_true):
         output3 = model(imgL,imgR)
 
     pred_disp = output3
+    mask = (disp_true > 0) & (disp_true < args.maxdisp)
 
     if args.dataset == "flow":
         #computing EPE#
-        mask = disp_true < args.maxdisp
-        output = torch.squeeze(pred_disp, 1)[:,4:,:]
+        output = torch.squeeze(pred_disp, 1)
 
         if len(disp_true[mask])==0:
            loss = 0
@@ -139,7 +139,6 @@ def test(model, args, imgL, imgR, disp_true):
            loss = torch.mean(torch.abs(output[mask]-disp_true[mask])).item()
     elif args.dataset == "kitti":
         #computing 3-px error#
-        mask = (disp_true > 0) & (disp_true < args.maxdisp)
         disp_true = disp_true[mask]
         pred_disp = torch.squeeze(pred_disp, 1)
         disp = torch.abs(disp_true - pred_disp[mask])
