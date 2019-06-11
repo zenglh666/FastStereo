@@ -55,37 +55,41 @@ class disparityregression(nn.Module):
         return out
 
 class feature_extraction(nn.Module):
-    def __init__(self, planes=64):
+    def __init__(self, planes=32):
         super(feature_extraction, self).__init__()
         self.firstconv = nn.Sequential(
-            nn.Conv2d(3, planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=False),
-            nn.BatchNorm2d(planes),
-            nn.ReLU(inplace=True)
+            nn.Dropout(p=0.2),
+            nn.Conv2d(3, planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=True),
+            nn.ReLU(inplace=False)
         )
 
         self.unet_conv = nn.ModuleList()
         inplanes = planes
-        for i in range(4):
+        for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
-                nn.BatchNorm2d(outplanes),
+                nn.Dropout(p=0.2),
+                nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=True),
                 nn.ReLU(inplace=True),
                 ResBlock(outplanes,  kernel_size=3, stride=1, padding=1, dilation=1),
             ))
             inplanes = outplanes
 
         self.unet_dconv = nn.ModuleList()
-        for i in range(4):
+        for i in range(3):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
-                nn.ConvTranspose2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
-                nn.BatchNorm2d(outplanes),
+                nn.Dropout(p=0.2),
+                nn.ConvTranspose2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=True),
                 nn.ReLU(inplace=True),
+                ResBlock(outplanes,  kernel_size=3, stride=1, padding=1, dilation=1),
             ))
             inplanes = outplanes
 
-        self.final_res = ResBlock(inplanes, kernel_size=3, stride=1, padding=1, dilation=1)
+        self.final_res = nn.Sequential(
+            nn.Dropout(p=0.5),
+            ResBlock(inplanes, kernel_size=3, stride=1, padding=1, dilation=1)
+        )
 
 
     def forward(self, x):

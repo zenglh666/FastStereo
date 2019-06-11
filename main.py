@@ -93,7 +93,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     disp_true = disp_true[mask]
     #----
     optimizer.zero_grad()
-    
+     
     if args.model == 'stackhourglass':
         output1, output2, output3 = model(imgL,imgR)
         output1 = torch.squeeze(output1,1)
@@ -123,8 +123,10 @@ def test(model, args, imgL, imgR, disp_true):
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
 
+    start_time = time.time()
     with torch.no_grad():
         output3 = model(imgL,imgR)
+    time = start_time - time.time()
 
     pred_disp = output3
     mask = (disp_true > 0) & (disp_true < args.maxdisp)
@@ -147,7 +149,7 @@ def test(model, args, imgL, imgR, disp_true):
         loss = torch.sum(correct.float()).item() / torch.sum(mask.float()).item()
         loss = (1 - loss) * 100
 
-    return loss
+    return loss, time
 
 
 def main():
@@ -211,11 +213,11 @@ def main():
 
     TrainImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(trli, trri, trld, training=True, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
+        batch_size=args.batch_size, shuffle=True, num_workers=5, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
+        batch_size=args.batch_size//2, shuffle=False, num_workers=5, drop_last=False)
 
 
     if args.model == 'stackhourglass':
@@ -267,17 +269,18 @@ def main():
         torch.cuda.empty_cache()
 
         ## TEST ##
-        start_time = time.time()
+        total_time = 0.
         total_test_loss = 0
         for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
-            loss = test(model, args, imgL,imgR, disp_L)
+            loss, per_time= test(model, args, imgL,imgR, disp_L)
             if (batch_idx + 1) % args.log_steps == 0:
                 logger.info('Iter %d test loss = %.3f' %(batch_idx+1, loss))
             total_test_loss += loss
+            total_time += per_time
 
         total_test_loss /= len(TestImgLoader)
-        logger.info('total test loss = %.3f, per example time = %.2f' % (
-            total_test_loss, (time.time() - start_time) / len(TestImgLoader)))
+        logger.info('total test loss = %.3f, per example time = %.5f' % (
+            total_test_loss, total_time / len(TestImgLoader)))
         torch.cuda.empty_cache()
 
         if total_test_loss < max_loss:

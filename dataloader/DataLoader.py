@@ -7,6 +7,7 @@ from io import BytesIO
 import numpy as np
 import re
  
+left_cache, right_cache, disp_cache = {}, {}, {}
 
 def readPFM(file):
     color = None
@@ -57,14 +58,15 @@ class ImageFloder(data.Dataset):
 
         self.with_cache = with_cache
         if with_cache:
-            self.left_cache = {}
-            self.right_cache = {}
-            self.disp_cache = {}
+            global left_cache, right_cache, disp_cache
+            self.left_cache = left_cache
+            self.right_cache = right_cache
+            self.disp_cache = disp_cache
 
         self.dataset = dataset
         if dataset == "flow":
             self.desire_w = 960
-            self.desire_h = 576#544
+            self.desire_h = 544
         elif dataset == "kitti":
             self.desire_w = 1280#1232
             self.desire_h = 384#368

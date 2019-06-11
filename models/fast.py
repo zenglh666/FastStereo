@@ -7,7 +7,7 @@ import math
 from .utils import *
 
 class PSMNet(nn.Module):
-    def __init__(self, maxdisp, planes=64):
+    def __init__(self, maxdisp, planes=32):
         super(PSMNet, self).__init__()
         self.maxdisp = maxdisp
         inplanes = planes * 2
@@ -15,35 +15,37 @@ class PSMNet(nn.Module):
         self.feature_extraction = feature_extraction()
 
         self.fuse = nn.Sequential(
-            nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
-            nn.BatchNorm3d(planes),
+            nn.Dropout(p=0.2),
+            nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=True),
             nn.ReLU(inplace=True),
-            #ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
         ) 
 
         self.unet_conv = nn.ModuleList()
         inplanes = planes
-        for i in range(4):
+        for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
-                nn.BatchNorm3d(outplanes),
+                nn.Dropout(p=0.2),
+                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=True),
                 nn.ReLU(inplace=True),
+                ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
             ))
             inplanes = outplanes
 
         self.unet_dconv = nn.ModuleList()
-        for i in range(4):
+        for i in range(3):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
-                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
-                nn.BatchNorm3d(outplanes),
-                nn.ReLU(inplace=True)
+                nn.Dropout(p=0.2),
+                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=True),
+                nn.ReLU(inplace=True),
+                ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
             ))
             inplanes = outplanes
 
         self.classifier = nn.Sequential(
-            #ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
+            ResBlock3D(inplanes, kernel_size=3, padding=1, stride=1, dilation=1),
+            nn.Dropout(p=0.5),
             nn.ConvTranspose3d(inplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
         )
         self.disparityregression = disparityregression(self.maxdisp)
