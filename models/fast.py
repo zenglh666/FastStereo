@@ -14,12 +14,11 @@ class PSMNet(nn.Module):
 
         self.feature_extraction = feature_extraction()
 
-        self.dres0 = nn.Sequential(
+        self.fuse = nn.Sequential(
             nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
             nn.BatchNorm3d(planes),
             nn.ReLU(inplace=True),
-            ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
-            ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
+            #ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
         ) 
 
         self.unet_conv = nn.ModuleList()
@@ -30,12 +29,10 @@ class PSMNet(nn.Module):
                 nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
-                #ResBlock3D(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
             ))
             inplanes = outplanes
 
         self.unet_dconv = nn.ModuleList()
-        self.classifiers = nn.ModuleList()
         for i in range(4):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
@@ -43,9 +40,12 @@ class PSMNet(nn.Module):
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True)
             ))
-            self.classifiers.append(nn.Conv3d(outplanes, 1, kernel_size=3, stride=2, padding=1, dilation=1, bias=False))
             inplanes = outplanes
 
+        self.classifier = nn.Sequential(
+            #ResBlock3D(planes, kernel_size=3, padding=1, stride=1, dilation=1),
+            nn.ConvTranspose3d(inplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
+        )
         self.disparityregression = disparityregression(self.maxdisp)
 
         for m in self.modules():
@@ -85,7 +85,7 @@ class PSMNet(nn.Module):
                 cost[:, refimg_fea.size()[1]:, i, :,:]   = targetimg_fea
         cost = cost.contiguous()
 
-        output = self.dres0(cost)
+        output = self.fuse(cost)
         uoutput = [output]
         for l in self.unet_conv:
             output = l(output)
@@ -95,20 +95,12 @@ class PSMNet(nn.Module):
         doutput = []
         for i, l in enumerate(self.unet_dconv):
             output = l(output)
-            if i + 1 < len(uoutput):
-                output = output + uoutput[i+1]
+            output = output + uoutput[i+1]
             doutput.append(output)
         
-        doutput = doutput[-3:]
-        preds = []
-        for i, output in enumerate(doutput):
-            output = self.classifiers[i - 3](output)
-            output = F.interpolate(output, [self.maxdisp,left.size()[2],left.size()[3]], mode='trilinear')
-            output = torch.squeeze(output, 1)
-            pred = F.softmax(output,dim=1)
-            pred = self.disparityregression(pred)
-            preds.append(pred)
-        if self.training:
-            return preds[0], preds[1], preds[2]
-        else:
-            return pred
+        output = self.classifier(output)
+        output = torch.squeeze(output, 1)
+        pred = F.softmax(output,dim=1)
+        pred = self.disparityregression(pred)
+        
+        return pred

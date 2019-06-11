@@ -94,7 +94,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     #----
     optimizer.zero_grad()
     
-    if args.model == 'stackhourglass' or args.model == 'fast':
+    if args.model == 'stackhourglass':
         output1, output2, output3 = model(imgL,imgR)
         output1 = torch.squeeze(output1,1)
         output2 = torch.squeeze(output2,1)
@@ -102,7 +102,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
         loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
         loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
         loss += F.smooth_l1_loss(output3[mask], disp_true) 
-    elif args.model == 'basic':
+    elif args.model == 'basic' or args.model == 'fast':
         output = model(imgL,imgR)
         output = torch.squeeze(output,1)
         loss = F.smooth_l1_loss(output[mask], disp_true)
