@@ -17,6 +17,7 @@ class ResBlock3D(nn.Module):
             nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=1, 
                 padding=padding, dilation=dilation, bias=False),
             nn.BatchNorm3d(planes),
+            nn.Dropout(p=0.5, inplace=True),
         )
         self.relu = nn.ReLU(inplace=True)
 
@@ -36,6 +37,7 @@ class ResBlock(nn.Module):
             nn.Conv2d(planes, planes, kernel_size=kernel_size, stride=1, 
                 padding=padding, dilation=dilation, bias=False),
             nn.BatchNorm2d(planes),
+            nn.Dropout(p=0.5, inplace=True),
         )
         self.relu = nn.ReLU(inplace=True)
 
@@ -58,7 +60,6 @@ class feature_extraction(nn.Module):
     def __init__(self, planes=32):
         super(feature_extraction, self).__init__()
         self.firstconv = nn.Sequential(
-            nn.Dropout(p=0.5),
             nn.Conv2d(3, planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=False),
             nn.BatchNorm2d(planes),
             nn.ReLU(inplace=True)
@@ -69,7 +70,6 @@ class feature_extraction(nn.Module):
         for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Dropout(p=0.2),
                 nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
@@ -82,7 +82,6 @@ class feature_extraction(nn.Module):
         for i in range(3):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
-                nn.Dropout(p=0.2),
                 nn.ConvTranspose2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
@@ -90,7 +89,6 @@ class feature_extraction(nn.Module):
             ))
             self.finals.append(nn.Sequential(
                 ResBlock(outplanes,  kernel_size=3, stride=1, padding=1, dilation=1),
-                nn.Dropout(p=0.5),
                 nn.Conv2d(outplanes, planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
             ))
             inplanes = outplanes

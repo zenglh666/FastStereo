@@ -15,7 +15,6 @@ class PSMNet(nn.Module):
         self.feature_extraction = feature_extraction()
 
         self.fuse = nn.Sequential(
-            nn.Dropout(p=0.5),
             nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
             nn.BatchNorm3d(planes),
             nn.ReLU(inplace=True),
@@ -26,7 +25,6 @@ class PSMNet(nn.Module):
         for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Dropout(p=0.2),
                 nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
@@ -39,7 +37,6 @@ class PSMNet(nn.Module):
         for i in range(3):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
-                nn.Dropout(p=0.2),
                 nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
@@ -47,7 +44,6 @@ class PSMNet(nn.Module):
             ))
             self.classifiers.append(nn.Sequential(
                 ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
-                nn.Dropout(p=0.5),
                 nn.ConvTranspose3d(outplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
             ))
             inplanes = outplanes
