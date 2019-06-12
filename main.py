@@ -94,7 +94,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     #----
     optimizer.zero_grad()
      
-    if args.model == 'stackhourglass':
+    if args.model == 'stackhourglass' or args.model == 'fast':
         output1, output2, output3 = model(imgL,imgR)
         output1 = torch.squeeze(output1,1)
         output2 = torch.squeeze(output2,1)
@@ -102,12 +102,13 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
         loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
         loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
         loss += F.smooth_l1_loss(output3[mask], disp_true) 
-    elif args.model == 'basic' or args.model == 'fast':
+    elif args.model == 'basic':
         output = model(imgL,imgR)
         output = torch.squeeze(output,1)
         loss = F.smooth_l1_loss(output[mask], disp_true)
 
-    loss.backward()
+    with torch.autograd.set_detect_anomaly(True):
+        loss.backward()
     optimizer.step()
 
     return loss.data.item()
@@ -126,7 +127,7 @@ def test(model, args, imgL, imgR, disp_true):
     start_time = time.time()
     with torch.no_grad():
         output3 = model(imgL,imgR)
-    time = start_time - time.time()
+    per_time = time.time() - start_time
 
     pred_disp = output3
     mask = (disp_true > 0) & (disp_true < args.maxdisp)
@@ -149,7 +150,7 @@ def test(model, args, imgL, imgR, disp_true):
         loss = torch.sum(correct.float()).item() / torch.sum(mask.float()).item()
         loss = (1 - loss) * 100
 
-    return loss, time
+    return loss, per_time
 
 
 def main():

@@ -15,8 +15,9 @@ class PSMNet(nn.Module):
         self.feature_extraction = feature_extraction()
 
         self.fuse = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=True),
+            nn.Dropout(p=0.5),
+            nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+            nn.BatchNorm3d(planes),
             nn.ReLU(inplace=True),
         ) 
 
@@ -26,28 +27,32 @@ class PSMNet(nn.Module):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
                 nn.Dropout(p=0.2),
-                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=True),
+                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
+                nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
                 ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
             ))
             inplanes = outplanes
 
         self.unet_dconv = nn.ModuleList()
+        self.classifiers = nn.ModuleList()
         for i in range(3):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
                 nn.Dropout(p=0.2),
-                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=True),
+                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
+                nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
                 ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
             ))
+            self.classifiers.append(nn.Sequential(
+                ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
+                nn.Dropout(p=0.5),
+                nn.ConvTranspose3d(outplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
+            ))
             inplanes = outplanes
 
-        self.classifier = nn.Sequential(
-            ResBlock3D(inplanes, kernel_size=3, padding=1, stride=1, dilation=1),
-            nn.Dropout(p=0.5),
-            nn.ConvTranspose3d(inplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
-        )
+        
         self.disparityregression = disparityregression(self.maxdisp)
 
         for m in self.modules():
@@ -94,15 +99,29 @@ class PSMNet(nn.Module):
             uoutput.append(output)
             
         uoutput.reverse()
-        doutput = []
-        for i, l in enumerate(self.unet_dconv):
+        preds = []
+        final  = None
+        output_size = [refimg_fea.size()[0], self.maxdisp, refimg_fea.size()[2] * 4, refimg_fea.size()[3] * 4]
+        for i, (l, c) in enumerate(zip(self.unet_dconv, self.classifiers)):
             output = l(output)
             output = output + uoutput[i+1]
-            doutput.append(output)
+            classify = torch.squeeze(c(output), 1)
+            cla_size = classify.size()
+            classify = classify.view([cla_size[0], cla_size[1], 1, cla_size[2], 1, cla_size[3], 1])
+            classify = classify.repeat([1, 
+                1, output_size[1]//cla_size[1], 
+                1, output_size[2]//cla_size[2], 
+                1, output_size[3]//cla_size[3]]
+            ).view(output_size)
+            if final is None:
+                final = classify
+            else:
+                final = final + classify
+            pred = F.softmax(final.clone(),dim=1)
+            pred = self.disparityregression(pred)
+            preds.append(pred)
         
-        output = self.classifier(output)
-        output = torch.squeeze(output, 1)
-        pred = F.softmax(output,dim=1)
-        pred = self.disparityregression(pred)
-        
-        return pred
+        if self.training:
+            return preds[0], preds[1], preds[2]
+        else:
+            return pred
