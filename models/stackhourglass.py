@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.utils.data
 import torch.nn.functional as F
 import math
-from .submodule import *
 
 def convbn(in_planes, out_planes, kernel_size, stride, pad, dilation):
 
@@ -131,7 +130,7 @@ class feature_extraction(nn.Module):
         output_feature = self.lastconv(output_feature)
 
         return output_feature
-        
+
 class hourglass(nn.Module):
     def __init__(self, inplanes):
         super(hourglass, self).__init__()
