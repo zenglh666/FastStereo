@@ -7,28 +7,33 @@ import math
 from .utils import *
 
 class PSMNet(nn.Module):
-    def __init__(self, maxdisp, planes=64):
+    def __init__(self, args):
         super(PSMNet, self).__init__()
-        self.maxdisp = maxdisp
-        inplanes = planes * 2
+        self.maxdisp = args.maxdisp
+        self.planes = args.planes
+        inplanes = self.planes * 2
 
-        self.feature_extraction = feature_extraction()
+        self.feature_extraction = feature_extraction(self.planes)
+        if args.shuffle:
+            block3d = ResBlock3DShuffle
+        else:
+            block3d = ResBlock3D
 
         self.fuse = nn.Sequential(
-            nn.Conv3d(inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
-            nn.BatchNorm3d(planes),
+            nn.Conv3d(inplanes, self.planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+            nn.BatchNorm3d(self.planes),
             nn.ReLU(inplace=True),
         ) 
 
         self.unet_conv = nn.ModuleList()
-        inplanes = planes
+        inplanes = self.planes
         for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
                 nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
-                ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
+                block3d(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
             ))
             inplanes = outplanes
 
@@ -40,10 +45,10 @@ class PSMNet(nn.Module):
                 nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
-                ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
+                block3d(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
             ))
             self.classifiers.append(nn.Sequential(
-                ResBlock3D(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
+                block3d(outplanes, kernel_size=3, padding=1, stride=1, dilation=1),
                 nn.ConvTranspose3d(outplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
             ))
             inplanes = outplanes

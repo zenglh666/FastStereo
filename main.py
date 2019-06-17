@@ -20,47 +20,56 @@ from dataloader import DataLoader as DA
 from models import *
 
 parser = argparse.ArgumentParser(description='FS')
-parser.add_argument('--maxdisp', type=int ,default=192,
-                    help='maxium disparity')
-parser.add_argument('--model', default='stackhourglass',
+parser.add_argument('--no-cuda', action='store_true', default=False,
+                    help='enables CUDA training')
+parser.add_argument('--seed', type=int, default=0,
+                    help='random seed (default: 0)')
+
+parser.add_argument('--model', type=str, default='stackhourglass',
                     help='select model')
-parser.add_argument('--dataset', default='flow',
+parser.add_argument('--dataset', type=str, default='flow',
                     help='datapath')
-parser.add_argument('--date', default='2015',
+parser.add_argument('--date', type=str, default='2015',
                     help='datapath')
-parser.add_argument('--datapath', default='/data/zenglh/scene_flow_dataset/',
+parser.add_argument('--datapath', type=str, default='/data/zenglh/scene_flow_dataset/',
                     help='datapath')
-parser.add_argument('--datapath-ext', default='',
+parser.add_argument('--datapath-ext', type=str, default='',
                     help='datapath')
-parser.add_argument('--with-cache', type=bool, default=False,
+parser.add_argument('--with-cache', action='store_true', default=False,
                     help='with-cache')
+
 parser.add_argument('--epochs', type=int, default=10,
                     help='number of epochs to train')
 parser.add_argument('--decay-epochs', type=int, default=200,
                     help='number of epochs to train')
 parser.add_argument('--log-steps', type=int, default=100,
                     help='log-steps')
-parser.add_argument('--loadmodel', default= None,
-                    help='load model')
-parser.add_argument('--savedir', default='/data/zenglh/FastStereo/results',
-                    help='save model')
-parser.add_argument('--savemodel', default='',
-                    help='save model')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='enables CUDA training')
-parser.add_argument('--seed', type=int, default=0, metavar='S',
-                    help='random seed (default: 0)')
 parser.add_argument('--batch-size', type=int, default=2,
                     help='batch size')
+
+parser.add_argument('--loadmodel', type=str, default= None,
+                    help='load model')
+parser.add_argument('--savedir', type=str, default='/data/zenglh/FastStereo/results',
+                    help='save model')
+parser.add_argument('--savemodel', type=str, default='',
+                    help='save model')
+
+parser.add_argument('--optimizer', type=str, default='adam',
+                    help='learning rate')
 parser.add_argument('--learning-rate', type=float, default=0.001,
                     help='learning rate')
 parser.add_argument('--weight-decay', type=float, default=0.0,
                     help='learning rate')
-parser.add_argument('--optimizer', default='adam',
-                    help='learning rate')
+
+parser.add_argument('--maxdisp', type=int ,default=192,
+                    help='maxium disparity')
+parser.add_argument('--planes', type=int, default=64,
+                    help='planes')
+parser.add_argument('--shuffle', action='store_true', default=False,
+                    help='shuffle net')
 
 def process(img, cuda):
-    img = img.transpose(1,3).transpose(2,3)
+    img = img.transpose(1,3).transpose(2,3).contiguous()
     mean = torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
     std = torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
     if cuda:
@@ -227,11 +236,9 @@ def main():
 
 
     if args.model == 'stackhourglass':
-        model = stackhourglass(args.maxdisp)
-    elif args.model == 'basic':
-        model = basic(args.maxdisp)
+        model = stackhourglass(args)
     elif args.model == 'fast':
-        model = fast(args.maxdisp)
+        model = fast(args)
     else:
         logger.info('no model')
 

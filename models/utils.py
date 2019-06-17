@@ -26,6 +26,33 @@ class ResBlock3D(nn.Module):
         y = self.relu(y)
         return y
 
+class ResBlock3DShuffle(nn.Module):
+    def __init__(self, planes, kernel_size, stride, padding, dilation):
+        self.groups = int(np.power(2, int(np.log2(planes) / 2)))
+        super(ResBlock3DShuffle, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=stride, 
+                padding=padding, dilation=dilation, groups=self.groups, bias=False),
+            nn.BatchNorm3d(planes),
+            nn.ReLU(inplace=True),
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=1, 
+                padding=padding, dilation=dilation, groups=self.groups, bias=False),
+            nn.BatchNorm3d(planes),
+            nn.Dropout(p=0.5, inplace=True),
+        )
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        y = self.conv1(x)
+        y_size = y.size()
+        y = y.view(y_size[0], self.groups, y_size[1]//self.groups, y_size[2], y_size[3], y_size[4])
+        y = y.transpose(1, 2).contiguous().view(y_size)
+        y = self.conv2(y) + x
+        y = self.relu(y)
+        return y
+
 class ResBlock(nn.Module):
     def __init__(self, planes, kernel_size, stride, padding, dilation):
         super(ResBlock, self).__init__()
@@ -57,7 +84,7 @@ class disparityregression(nn.Module):
         return out
 
 class feature_extraction(nn.Module):
-    def __init__(self, planes=64):
+    def __init__(self, planes):
         super(feature_extraction, self).__init__()
         self.firstconv = nn.Sequential(
             nn.Conv2d(3, planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=False),
