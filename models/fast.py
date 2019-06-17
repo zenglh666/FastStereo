@@ -7,7 +7,7 @@ import math
 from .utils import *
 
 class PSMNet(nn.Module):
-    def __init__(self, maxdisp, planes=32):
+    def __init__(self, maxdisp, planes=64):
         super(PSMNet, self).__init__()
         self.maxdisp = maxdisp
         inplanes = planes * 2

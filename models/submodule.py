@@ -114,8 +114,7 @@ class feature_extraction(nn.Module):
 
         self.lastconv = nn.Sequential(convbn(320, 128, 3, 1, 1, 1),
                                       nn.ReLU(inplace=True),
-                                      nn.Conv2d(128, 32, kernel_size=1, padding=0, stride = 1, bias=False),
-                                      nn.Dropout(p=0.5, inplace=True))
+                                      nn.Conv2d(128, 32, kernel_size=1, padding=0, stride = 1, bias=False))
 
     def _make_layer(self, block, planes, blocks, stride, pad, dilation):
         downsample = None

@@ -99,8 +99,8 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
         output1 = torch.squeeze(output1,1)
         output2 = torch.squeeze(output2,1)
         output3 = torch.squeeze(output3,1)
-        loss = 0.2*F.smooth_l1_loss(output1[mask], disp_true) 
-        loss += 0.5*F.smooth_l1_loss(output2[mask], disp_true) 
+        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
+        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
         loss += F.smooth_l1_loss(output3[mask], disp_true) 
     elif args.model == 'basic':
         output = model(imgL,imgR)
@@ -127,6 +127,7 @@ def test(model, args, imgL, imgR, disp_true):
     start_time = time.time()
     with torch.no_grad():
         output3 = model(imgL,imgR)
+    torch.cuda.synchronize()
     per_time = time.time() - start_time
 
     pred_disp = output3
@@ -216,9 +217,13 @@ def main():
         DA.ImageFloder(trli, trri, trld, training=True, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=True, num_workers=5, drop_last=False)
 
+    if args.dataset == 'flow':
+        batch_size = args.batch_size//2
+    else:
+        batch_size = 1
     TestImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size//2, shuffle=False, num_workers=5, drop_last=False)
+        batch_size=batch_size, shuffle=False, num_workers=5, drop_last=False)
 
 
     if args.model == 'stackhourglass':
