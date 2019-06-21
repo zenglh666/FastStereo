@@ -17,7 +17,7 @@ import sys
 from datetime import datetime
 from dataloader import listfile as lt
 from dataloader import DataLoader as DA
-from models import *
+from models import get_model
 
 parser = argparse.ArgumentParser(description='FS')
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -67,6 +67,8 @@ parser.add_argument('--planes', type=int, default=64,
                     help='planes')
 parser.add_argument('--shuffle', action='store_true', default=False,
                     help='shuffle net')
+parser.add_argument('--dilation', type=int, default=1,
+                    help='dilation')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()
@@ -103,18 +105,13 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     #----
     optimizer.zero_grad()
      
-    if args.model == 'stackhourglass' or args.model == 'fast':
-        output1, output2, output3 = model(imgL,imgR)
-        output1 = torch.squeeze(output1,1)
-        output2 = torch.squeeze(output2,1)
-        output3 = torch.squeeze(output3,1)
-        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
-        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
-        loss += F.smooth_l1_loss(output3[mask], disp_true) 
-    elif args.model == 'basic':
-        output = model(imgL,imgR)
-        output = torch.squeeze(output,1)
-        loss = F.smooth_l1_loss(output[mask], disp_true)
+    output1, output2, output3 = model(imgL,imgR)
+    output1 = torch.squeeze(output1,1)
+    output2 = torch.squeeze(output2,1)
+    output3 = torch.squeeze(output3,1)
+    loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
+    loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
+    loss += F.smooth_l1_loss(output3[mask], disp_true) 
 
     with torch.autograd.set_detect_anomaly(True):
         loss.backward()
@@ -234,13 +231,7 @@ def main():
         DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=batch_size, shuffle=False, num_workers=5, drop_last=False)
 
-
-    if args.model == 'stackhourglass':
-        model = stackhourglass(args)
-    elif args.model == 'fast':
-        model = fast(args)
-    else:
-        logger.info('no model')
+    model = get_model(args)
 
     if args.cuda:
         model = nn.DataParallel(model)

@@ -7,23 +7,22 @@ import math
 from .utils import *
 
 class feature_extraction(nn.Module):
-    def __init__(self, args):
+    def __init__(self, planes):
         super(feature_extraction, self).__init__()
         self.firstconv = nn.Sequential(
-            nn.Conv2d(3, args.planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=False),
-            nn.BatchNorm2d(args.planes),
+            nn.Conv2d(3, planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=False),
+            nn.BatchNorm2d(planes),
             nn.ReLU(inplace=True)
         )
 
         self.unet_conv = nn.ModuleList()
-        inplanes = args.planes
+        inplanes = planes
         for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
+                nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, dilation=3, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             ))
             inplanes = outplanes
 
@@ -32,14 +31,12 @@ class feature_extraction(nn.Module):
         for i in range(3):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
-                nn.ConvTranspose2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
+                nn.ConvTranspose2d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, output_padding=1, dilation=3, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             ))
             self.finals.append(nn.Sequential(
-                ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                nn.Conv2d(outplanes, args.planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Conv2d(outplanes, planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
             ))
             inplanes = outplanes
 
@@ -78,7 +75,7 @@ class PSMNet(nn.Module):
         self.planes = args.planes
         inplanes = self.planes * 2
 
-        self.feature_extraction = feature_extraction(args)
+        self.feature_extraction = feature_extraction(self.planes)
         if args.shuffle:
             block3d = ResBlock3DShuffle
         else:
@@ -95,10 +92,9 @@ class PSMNet(nn.Module):
         for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
+                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, dilation=3, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
-                block3d(outplanes, kernel_size=3, padding=args.dilation, stride=1, dilation=args.dilation),
             ))
             inplanes = outplanes
 
@@ -107,13 +103,11 @@ class PSMNet(nn.Module):
         for i in range(3):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
-                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
+                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, output_padding=1, dilation=3, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
-                block3d(outplanes, kernel_size=3, padding=args.dilation, stride=1, dilation=args.dilation),
             ))
             self.classifiers.append(nn.Sequential(
-                block3d(outplanes, kernel_size=3, padding=args.dilation, stride=1, dilation=args.dilation),
                 nn.ConvTranspose3d(outplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
             ))
             inplanes = outplanes
