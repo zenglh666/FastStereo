@@ -66,7 +66,7 @@ class ImageFloder(data.Dataset):
         self.dataset = dataset
         if dataset == "flow":
             self.desire_w = 960
-            self.desire_h = 544
+            self.desire_h = 576#544
         elif dataset == "kitti":
             self.desire_w = 1280#1232
             self.desire_h = 384#368

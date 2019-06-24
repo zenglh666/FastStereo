@@ -104,17 +104,23 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     disp_true = disp_true[mask]
     #----
     optimizer.zero_grad()
-     
-    output1, output2, output3 = model(imgL,imgR)
-    output1 = torch.squeeze(output1,1)
-    output2 = torch.squeeze(output2,1)
-    output3 = torch.squeeze(output3,1)
-    loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
-    loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
-    loss += F.smooth_l1_loss(output3[mask], disp_true) 
+    
+    if "fasta" in args.model:
+        outputs = model(imgL,imgR)
+        loss = 0.
+        for output in outputs:
+            output = torch.squeeze(output,1)
+            loss += F.smooth_l1_loss(output[mask], disp_true) 
+    else:
+        output1, output2, output3 = model(imgL,imgR)
+        output1 = torch.squeeze(output1,1)
+        output2 = torch.squeeze(output2,1)
+        output3 = torch.squeeze(output3,1)
+        loss = 0.5*F.smooth_l1_loss(output1[mask], disp_true) 
+        loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
+        loss += F.smooth_l1_loss(output3[mask], disp_true) 
 
-    with torch.autograd.set_detect_anomaly(True):
-        loss.backward()
+    loss.backward()
     optimizer.step()
 
     return loss.data.item()
@@ -183,7 +189,7 @@ def main():
     fh.setFormatter(formatter)
     logger.addHandler(fh)
 
-    for k,v in vars(args).items():
+    for k,v in sorted(vars(args).items()):
         logger.info('%s - %s' % (k, v))
 
     if args.seed != 0:
@@ -201,35 +207,23 @@ def main():
             trli15, trri15, trld15, teli15, teri15, teld15 = lt.list_kitti_file(args.datapath, '2015')
             trli12, trri12, trld12, teli12, teri12, teld12 = lt.list_kitti_file(args.datapath_ext, '2012')
             if args.date == '2015':
-                teli, teri, teld = teli15, teri15, teld15
-                trli, trri, trld = trli15, trri15, trld15
-                trli.extend(trli12)
-                trli.extend(teli12)
-                trri.extend(trri12)
-                trri.extend(teri12)
-                trld.extend(trld12)
-                trld.extend(teld12)
+                trli, trri, trld, teli, teri, teld = trli15, trri15, trld15, teli15, teri15, teld15
+                trli.extend(trli12 + teli12)
+                trri.extend(trri12 + teri12)
+                trld.extend(trld12 + teld12)
             else:
-                teli, teri, teld = teli12, teri12, teld12
-                trli, trri, trld = trli12, trri12, trld12
-                trli.extend(trli15)
-                trli.extend(teli15)
-                trri.extend(trri15)
-                trri.extend(teri15)
-                trld.extend(trld15)
-                trld.extend(teld15)
+                trli, trri, trld, teli, teri, teld = trli12, trri12, trld12, teli12, teri12, teld12
+                trli.extend(trli15 + teli15)
+                trri.extend(trri15 + teri15)
+                trld.extend(trld15 + teld15)
 
     TrainImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(trli, trri, trld, training=True, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=True, num_workers=5, drop_last=False)
 
-    if args.dataset == 'flow':
-        batch_size = args.batch_size//2
-    else:
-        batch_size = 1
     TestImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=batch_size, shuffle=False, num_workers=5, drop_last=False)
+        batch_size=args.batch_size//2, shuffle=False, num_workers=5, drop_last=False)
 
     model = get_model(args)
 
@@ -284,7 +278,7 @@ def main():
 
         total_test_loss /= len(TestImgLoader)
         logger.info('total test loss = %.3f, per example time = %.5f' % (
-            total_test_loss, total_time / len(TestImgLoader)))
+            total_test_loss, total_time / len(TestImgLoader.dataset)))
         torch.cuda.empty_cache()
 
         if total_test_loss < max_loss:

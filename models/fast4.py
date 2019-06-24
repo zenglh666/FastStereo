@@ -167,18 +167,11 @@ class PSMNet(nn.Module):
         uoutput.reverse()
         preds = []
         final  = None
-        output_size = [refimg_fea.size()[0], self.maxdisp, refimg_fea.size()[2] * 4, refimg_fea.size()[3] * 4]
         for i, (l, c) in enumerate(zip(self.unet_dconv, self.classifiers)):
             output = l(output)
             output = output + uoutput[i+1]
-            classify = torch.squeeze(c(output), 1)
-            cla_size = classify.size()
-            classify = classify.view([cla_size[0], cla_size[1], 1, cla_size[2], 1, cla_size[3], 1])
-            classify = classify.repeat([1, 
-                1, output_size[1]//cla_size[1], 
-                1, output_size[2]//cla_size[2], 
-                1, output_size[3]//cla_size[3]]
-            ).view(output_size)
+            classify = F.interpolate(output, [self.maxdisp//4,left.size()[2]//4,left.size()[3]//4], mode='trilinear')
+            classify = torch.squeeze(c(classify), 1)
             if final is None:
                 final = classify
             else:

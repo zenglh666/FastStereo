@@ -5,7 +5,7 @@ import torch.utils.data
 import torch.nn.functional as F
 import math
 from .utils import *
-
+ 
 class feature_extraction(nn.Module):
     def __init__(self, args):
         super(feature_extraction, self).__init__()
@@ -114,9 +114,11 @@ class PSMNet(nn.Module):
                 nn.ReLU(inplace=True),
             ))
             self.classifiers.append(nn.Sequential(
-                nn.ConvTranspose3d(outplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
+                nn.Conv3d(outplanes, self.planes, kernel_size=3, stride=1, padding=3, dilation=3, bias=False),
             ))
             inplanes = outplanes
+        self.final_conv = nn.ConvTranspose3d(self.planes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
+            
 
         
         self.disparityregression = disparityregression(self.maxdisp)
@@ -171,7 +173,8 @@ class PSMNet(nn.Module):
         for i, (l, c) in enumerate(zip(self.unet_dconv, self.classifiers)):
             output = l(output)
             output = output + uoutput[i+1]
-            classify = torch.squeeze(c(output), 1)
+            classify = c(output)
+            classify = torch.squeeze(self.final_conv(classify), 1)
             cla_size = classify.size()
             classify = classify.view([cla_size[0], cla_size[1], 1, cla_size[2], 1, cla_size[3], 1])
             classify = classify.repeat([1, 

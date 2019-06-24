@@ -17,7 +17,7 @@ class feature_extraction(nn.Module):
 
         self.unet_conv = nn.ModuleList()
         inplanes = args.planes
-        for i in range(3):
+        for i in range(4):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
                 nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, dilation=3, bias=False),
@@ -31,7 +31,7 @@ class feature_extraction(nn.Module):
 
         self.unet_dconv = nn.ModuleList()
         self.finals = nn.ModuleList()
-        for i in range(3):
+        for i in range(4):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
                 nn.ConvTranspose2d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, output_padding=1, dilation=3, bias=False),
@@ -95,7 +95,7 @@ class PSMNet(nn.Module):
 
         self.unet_conv = nn.ModuleList()
         inplanes = self.planes
-        for i in range(3):
+        for i in range(4):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
                 nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, dilation=3, bias=False),
@@ -106,7 +106,7 @@ class PSMNet(nn.Module):
 
         self.unet_dconv = nn.ModuleList()
         self.classifiers = nn.ModuleList()
-        for i in range(3):
+        for i in range(4):
             outplanes = inplanes // 2
             self.unet_dconv.append(nn.Sequential(
                 nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, output_padding=1, dilation=3, bias=False),
@@ -188,6 +188,6 @@ class PSMNet(nn.Module):
             preds.append(pred)
         
         if self.training:
-            return preds[0], preds[1], preds[2]
+            return preds[-3], preds[-2], preds[-1]
         else:
             return pred

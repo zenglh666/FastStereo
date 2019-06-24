@@ -20,29 +20,20 @@ class feature_extraction(nn.Module):
         for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, dilation=3, bias=False),
+                nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
                 ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
                 ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             ))
             inplanes = outplanes
 
-        self.unet_dconv = nn.ModuleList()
         self.finals = nn.ModuleList()
-        for i in range(3):
+        for i in range(4):
             outplanes = inplanes // 2
-            self.unet_dconv.append(nn.Sequential(
-                nn.ConvTranspose2d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, output_padding=1, dilation=3, bias=False),
-                nn.BatchNorm2d(outplanes),
-                nn.ReLU(inplace=True),
-                ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                ResBlock(outplanes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-            ))
             self.finals.append(nn.Sequential(
-                nn.Conv2d(outplanes, args.planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Conv2d(inplanes, args.planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.BatchNorm2d(args.planes),
             ))
             inplanes = outplanes
 
@@ -58,20 +49,18 @@ class feature_extraction(nn.Module):
             
         uoutput.reverse()
         final = None
-        for i, (l, f) in enumerate(zip(self.unet_dconv, self.finals)):
-            output = l(output)
-            output = output + uoutput[i+1]
-            ff = f(output)
-            ff_size = ff.size()
-            ff = ff.view([ff_size[0], ff_size[1], ff_size[2], 1, ff_size[3], 1])
-            ff = ff.repeat([1, 1, 
-                1, output_size[2]//ff_size[2], 
-                1, output_size[3]//ff_size[3]]
+        for i, f in enumerate(self.finals):
+            feature = f(uoutput[i])
+            feature_size = feature.size()
+            feature = feature.view([feature_size[0], feature_size[1], feature_size[2], 1, feature_size[3], 1])
+            feature = feature.repeat([1, 1, 
+                1, output_size[2]//feature_size[2], 
+                1, output_size[3]//feature_size[3]]
             ).view(output_size)
             if final is None:
-                final = ff
+                final = feature
             else:
-                final = final + ff
+                final = final + feature
         return final
         
 class PSMNet(nn.Module):
@@ -98,23 +87,17 @@ class PSMNet(nn.Module):
         for i in range(3):
             outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
-                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, dilation=3, bias=False),
+                nn.Conv3d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
             ))
             inplanes = outplanes
 
-        self.unet_dconv = nn.ModuleList()
         self.classifiers = nn.ModuleList()
-        for i in range(3):
+        for i in range(4):
             outplanes = inplanes // 2
-            self.unet_dconv.append(nn.Sequential(
-                nn.ConvTranspose3d(inplanes, outplanes, kernel_size=3, stride=2, padding=3, output_padding=1, dilation=3, bias=False),
-                nn.BatchNorm3d(outplanes),
-                nn.ReLU(inplace=True),
-            ))
             self.classifiers.append(nn.Sequential(
-                nn.ConvTranspose3d(outplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
+                nn.ConvTranspose3d(inplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
             ))
             inplanes = outplanes
 
@@ -168,10 +151,8 @@ class PSMNet(nn.Module):
         preds = []
         final  = None
         output_size = [refimg_fea.size()[0], self.maxdisp, refimg_fea.size()[2] * 4, refimg_fea.size()[3] * 4]
-        for i, (l, c) in enumerate(zip(self.unet_dconv, self.classifiers)):
-            output = l(output)
-            output = output + uoutput[i+1]
-            classify = torch.squeeze(c(output), 1)
+        for i, c in enumerate(self.classifiers):
+            classify = torch.squeeze(c(uoutput[i]), 1)
             cla_size = classify.size()
             classify = classify.view([cla_size[0], cla_size[1], 1, cla_size[2], 1, cla_size[3], 1])
             classify = classify.repeat([1, 
@@ -188,6 +169,6 @@ class PSMNet(nn.Module):
             preds.append(pred)
         
         if self.training:
-            return preds[0], preds[1], preds[2]
+            return preds
         else:
             return pred
