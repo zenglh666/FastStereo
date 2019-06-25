@@ -9,6 +9,10 @@ from .fasta1 import PSMNet as fasta1
 from .fasta2 import PSMNet as fasta2
 from .fasta3 import PSMNet as fasta3
 from .fasta4 import PSMNet as fasta4
+from .fastb1 import PSMNet as fastb1
+from .fastb2 import PSMNet as fastb2
+from .fastc1 import PSMNet as fastc1
+from .fastc2 import PSMNet as fastc2
 
 def get_model(args):
     if args.model == 'stackhourglass':
@@ -33,6 +37,14 @@ def get_model(args):
         model = fasta3(args)
     elif args.model == 'fasta4':
         model = fasta4(args)
+    elif args.model == 'fastb1':
+        model = fastb1(args)
+    elif args.model == 'fastb2':
+        model = fastb2(args)
+    elif args.model == 'fastc1':
+        model = fastc1(args)
+    elif args.model == 'fastc2':
+        model = fastc2(args)
     else:
         raise ValueError('no much model')
     return model

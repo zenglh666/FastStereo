@@ -105,12 +105,15 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     #----
     optimizer.zero_grad()
     
-    if "fasta" in args.model:
+    if "fasta" in args.model or "fastc" in args.model:
         outputs = model(imgL,imgR)
         loss = 0.
         for output in outputs:
             output = torch.squeeze(output,1)
             loss += F.smooth_l1_loss(output[mask], disp_true) 
+    elif "fastb" in args.model:
+        output = model(imgL,imgR)
+        loss = F.smooth_l1_loss(output[mask], disp_true) 
     else:
         output1, output2, output3 = model(imgL,imgR)
         output1 = torch.squeeze(output1,1)
@@ -232,7 +235,7 @@ def main():
         model.cuda()
 
     if args.loadmodel is not None:
-        state_dict = torch.load(args.loadmodel)
+        state_dict = torch.load(os.path.join(args.savedir, args.loadmodel, "max_loss.tar"))
         model.load_state_dict(state_dict['state_dict'])
 
     logger.info('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
