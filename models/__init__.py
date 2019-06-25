@@ -11,6 +11,7 @@ from .fasta3 import PSMNet as fasta3
 from .fasta4 import PSMNet as fasta4
 from .fastb1 import PSMNet as fastb1
 from .fastb2 import PSMNet as fastb2
+from .fastb3 import PSMNet as fastb3
 from .fastc1 import PSMNet as fastc1
 from .fastc2 import PSMNet as fastc2
 
@@ -41,6 +42,8 @@ def get_model(args):
         model = fastb1(args)
     elif args.model == 'fastb2':
         model = fastb2(args)
+    elif args.model == 'fastb3':
+        model = fastb3(args)
     elif args.model == 'fastc1':
         model = fastc1(args)
     elif args.model == 'fastc2':
