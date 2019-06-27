@@ -59,6 +59,8 @@ def get_model(args):
         model = fastb7(args)
     elif args.model == 'fastb8':
         model = fastb8(args)
+    elif args.model == 'fastb9':
+        model = fastb8(args)
     elif args.model == 'fastc1':
         model = fastc1(args)
     elif args.model == 'fastc2':
