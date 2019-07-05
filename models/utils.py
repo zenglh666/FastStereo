@@ -17,7 +17,6 @@ class ResBlock3D(nn.Module):
             nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=1, 
                 padding=padding, dilation=dilation, bias=False),
             nn.BatchNorm3d(planes),
-            nn.Dropout(p=0.5, inplace=True),
         )
         self.relu = nn.ReLU(inplace=True)
 
@@ -40,7 +39,6 @@ class ResBlock3DShuffle(nn.Module):
             nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=1, 
                 padding=padding, dilation=dilation, groups=self.groups, bias=False),
             nn.BatchNorm3d(planes),
-            nn.Dropout(p=0.5, inplace=True),
         )
         self.relu = nn.ReLU(inplace=True)
 
@@ -64,7 +62,6 @@ class ResBlock(nn.Module):
             nn.Conv2d(planes, planes, kernel_size=kernel_size, stride=1, 
                 padding=padding, dilation=dilation, bias=False),
             nn.BatchNorm2d(planes),
-            nn.Dropout(p=0.5, inplace=True),
         )
         self.relu = nn.ReLU(inplace=True)
 
@@ -87,7 +84,6 @@ class ResBlockShuffle(nn.Module):
             nn.Conv2d(planes, planes, kernel_size=kernel_size, stride=1, 
                 padding=padding, dilation=dilation, groups=self.groups, bias=False),
             nn.BatchNorm2d(planes),
-            nn.Dropout(p=0.5, inplace=True),
         )
         self.relu = nn.ReLU(inplace=True)
 

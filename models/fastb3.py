@@ -5,83 +5,48 @@ import torch.utils.data
 import torch.nn.functional as F
 import math
 from .utils import *
-
-class feature_extraction(nn.Module):
-    def __init__(self, args):
-        super(feature_extraction, self).__init__()
-        self.firstconv = nn.Sequential(
-            nn.Conv2d(3, args.planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=False),
-            nn.BatchNorm2d(args.planes),
-            nn.ReLU(inplace=True)
-        )
-
-        self.unet_conv = nn.ModuleList()
-        inplanes = args.planes
-        for i in range(4):
-            self.unet_conv.append(nn.Sequential(
-                nn.Conv2d(args.planes, args.planes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
-                nn.BatchNorm2d(args.planes),
-                nn.ReLU(inplace=True),
-                ResBlock(args.planes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                ResBlock(args.planes,  kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-            ))
-
-
-
-    def forward(self, x):
-        output      = self.firstconv(x)
-        output_size = output.size()
-        uoutput = [output]
-        for l in self.unet_conv:
-            output = l(output)
-            uoutput.append(output)
-            
-        uoutput.reverse()
-        final = None
-        for feature in uoutput:
-            feature_size = feature.size()
-            feature = feature.view([feature_size[0], feature_size[1], feature_size[2], 1, feature_size[3], 1])
-            feature = feature.repeat([1, 1, 
-                1, output_size[2]//feature_size[2], 
-                1, output_size[3]//feature_size[3]]
-            ).view(output_size)
-            if final is None:
-                final = feature
-            else:
-                final = final + feature
-        return final
         
 class PSMNet(nn.Module):
     def __init__(self, args):
         super(PSMNet, self).__init__()
         self.maxdisp = args.maxdisp
         self.planes = args.planes
-        inplanes = self.planes * 2
 
-        self.feature_extraction = feature_extraction(args)
         if args.shuffle:
-            block3d = ResBlock3DShuffle
+            block3d = DensesBlock3DShuffle
+            block2d = DensesBlockShuffle
         else:
-            block3d = ResBlock3D
+            block3d = DensesBlock3D
+            block2d = DensesBlock
+
+        self.feature_extraction = nn.Sequential(
+            nn.Conv2d(3, self.planes, kernel_size=7, stride=4, padding=3, dilation=1, bias=False),
+            nn.BatchNorm2d(self.planes),
+            nn.ReLU(inplace=True),
+            block2d(args.planes, args.planes, kernel_size=3,  padding=args.dilation, dilation=args.dilation),
+            block2d(args.planes*2, args.planes, kernel_size=3,  padding=args.dilation, dilation=args.dilation),
+            block2d(args.planes*3, args.planes, kernel_size=3,  padding=args.dilation, dilation=args.dilation),
+        )
+
+        inplanes = self.planes * 4
 
         self.fuse = nn.Sequential(
-            nn.Conv3d(inplanes, self.planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+            nn.Conv3d(inplanes, self.planes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
             nn.BatchNorm3d(self.planes),
+            nn.ReLU(inplace=True),
+            block3d(args.planes, args.planes, kernel_size=3,  padding=args.dilation, dilation=args.dilation),
+            block3d(args.planes*2, args.planes, kernel_size=3,  padding=args.dilation, dilation=args.dilation),
+            block3d(args.planes*3, args.planes, kernel_size=3,  padding=args.dilation, dilation=args.dilation),
+            nn.ConvTranspose3d(args.planes*4, args.planes*4, kernel_size=3, stride=2, padding=1, output_padding=1, dilation=1, bias=False),
+            nn.BatchNorm3d(args.planes*4),
             nn.ReLU(inplace=True),
         ) 
 
-        self.unet_conv = nn.ModuleList()
-        for i in range(4):
-            self.unet_conv.append(nn.Sequential(
-                nn.Conv3d(self.planes, self.planes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
-                nn.BatchNorm3d(self.planes),
-                nn.ReLU(inplace=True),
-                block3d(self.planes, kernel_size=3, padding=args.dilation, stride=1, dilation=args.dilation),
-                block3d(self.planes, kernel_size=3, padding=args.dilation, stride=1, dilation=args.dilation),
-            ))
+        inplanes = self.planes * 8
 
-        self.classifier = nn.ConvTranspose3d(
-            self.planes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
+        self.classifier = nn.Sequential(
+            nn.ConvTranspose3d(inplanes, 1, kernel_size=7, stride=4, padding=3, output_padding=3, dilation=1, bias=False)
+        )
         
         self.disparityregression = disparityregression(self.maxdisp)
 
@@ -101,7 +66,6 @@ class PSMNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.bias.data.zero_()
 
-
     def forward(self, left, right):
 
         refimg_fea     = self.feature_extraction(left)
@@ -110,45 +74,21 @@ class PSMNet(nn.Module):
 
         #matching
         cost = torch.zeros(
-            [refimg_fea.size()[0], refimg_fea.size()[1]*2, self.maxdisp//4,  refimg_fea.size()[2],  refimg_fea.size()[3]],
+            [refimg_fea.size()[0], refimg_fea.size()[1], self.maxdisp//4,  refimg_fea.size()[2],  refimg_fea.size()[3]],
             device=refimg_fea.device)
 
         for i in range(self.maxdisp//4):
             if i > 0 :
-                cost[:, :refimg_fea.size()[1], i, :,i:]   = refimg_fea[:,:,:,i:]
-                cost[:, refimg_fea.size()[1]:, i, :,i:] = targetimg_fea[:,:,:,:-i]
+                cost[:, :, i, :,i:]   = refimg_fea[:,:,:,i:] * targetimg_fea[:,:,:,:-i]
             else:
-                cost[:, :refimg_fea.size()[1], i, :,:]   = refimg_fea
-                cost[:, refimg_fea.size()[1]:, i, :,:]   = targetimg_fea
+                cost[:, :, i, :,:]   = refimg_fea * targetimg_fea
         cost = cost.contiguous()
 
         output = self.fuse(cost)
-        uoutput = [output]
-        output_size = output.size()
-        for l in self.unet_conv:
-            output = l(output)
-            uoutput.append(output)
-            
-        uoutput.reverse()
-        preds = []
-        final  = None
-        for feature in uoutput:
-            feature_size = feature.size()
-            feature = feature.view([feature_size[0], feature_size[1], feature_size[2], 1, feature_size[3], 1, feature_size[4], 1])
-            feature = feature.repeat([1, 1, 
-                1, output_size[2]//feature_size[2], 
-                1, output_size[3]//feature_size[3],
-                1, output_size[4]//feature_size[4]]
-            ).view(output_size)
-            if final is None:
-                final = feature
-            else:
-                final = final + feature
-
-        final = self.classifier(final)
+        output = torch.cat((output, cost), 1)
+        final = self.classifier(output)
         final = torch.squeeze(final, 1)
         pred = F.softmax(final,dim=1)
         pred = self.disparityregression(pred)
-        preds.append(pred)
         
         return pred
