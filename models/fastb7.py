@@ -23,8 +23,6 @@ class PSMNet(nn.Module):
             nn.Conv2d(3, args.planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
             nn.BatchNorm2d(args.planes),
             nn.ReLU(inplace=True),
-            block2d(args.planes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-            block2d(args.planes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
         )
 
         self.unet_conv = nn.ModuleList()
@@ -46,6 +44,8 @@ class PSMNet(nn.Module):
             nn.ReLU(inplace=True),
             block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+            block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+            block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         )
         
@@ -58,12 +58,9 @@ class PSMNet(nn.Module):
                 nn.Conv2d(inplanes, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                nn.Conv2d(outplanes, 9, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Conv2d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
             ))
             inplanes = outplanes
-        self.disparityregression2 = disparityregression(9)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
@@ -132,9 +129,7 @@ class PSMNet(nn.Module):
             targetimg_fea = F.grid_sample(targetimg_fea, flow)
             feature = torch.cat((refimg_fea, targetimg_fea), dim=1)
             res = conv(feature)
-            res = F.softmax(res,dim=1)
-            res = self.disparityregression2(res)
-            pred += res
+            pred += torch.squeeze(res, 1)
         
         return pred
 
