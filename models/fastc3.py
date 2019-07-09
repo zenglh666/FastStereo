@@ -55,9 +55,11 @@ class PSMNet(nn.Module):
         for i in range(3):
             outplanes = inplanes // 2
             self.fuse_conv.append(nn.Sequential(
-                nn.Conv2d(inplanes, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Conv2d(inplanes+1, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
+                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
                 nn.Conv2d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
             ))
             inplanes = outplanes
@@ -111,7 +113,7 @@ class PSMNet(nn.Module):
         output = torch.squeeze(output, 1)
         pred = F.softmax(output,dim=1)
         pred = self.disparityregression(pred)
-        preds = []
+        preds = [self.upsample_disp(pred, 8, sample_type="linear")]
 
         for i, conv in enumerate(self.fuse_conv):
             refimg_fea = refimg_fea_list[i+1]
@@ -125,23 +127,29 @@ class PSMNet(nn.Module):
             flow = (torch.cat((zeros, -flow), dim=-1) + range_h_w) * 2 -1
 
             targetimg_fea = F.grid_sample(targetimg_fea, flow)
-            feature = torch.cat((refimg_fea, targetimg_fea), dim=1)
+            feature = torch.cat((refimg_fea, targetimg_fea, torch.unsqueeze(pred, 1)), dim=1)
             res = conv(feature)
             pred += torch.squeeze(res, 1)
-            preds.append(self.upsample_disp(pred, 2**(3-i-1)))
+            preds.append(self.upsample_disp(pred, 2**(3-i-1), sample_type="linear"))
         
         if self.training:
             return preds
         else:
             return pred
 
-    def upsample_disp(self, disp, ratio):
+    def upsample_disp(self, disp, ratio, sample_type="pure"):
         if ratio == 1:
             return disp
-        disp = disp.view(disp.size()[0], disp.size()[1], 1, disp.size()[2], 1)
-        disp = disp.repeat([1, 1, ratio, 1, ratio])
-        disp = disp.view(disp.size()[0], disp.size()[1]*ratio, disp.size()[3]*ratio)
-        disp *= ratio
+        else:
+            if sample_type == "pure": 
+                disp = disp.view(disp.size()[0], disp.size()[1], 1, disp.size()[2], 1)
+                disp = disp.repeat([1, 1, ratio, 1, ratio])
+                disp = disp.view(disp.size()[0], disp.size()[1]*ratio, disp.size()[3]*ratio)
+                disp *= ratio
+            else:
+                disp = torch.unsqueeze(disp, 1)
+                disp = F.interpolate(disp, scale_factor=ratio, mode='bilinear') * ratio
+                disp = torch.squeeze(disp, 1)
         return disp
 
     def get_range(self, h, w, device):
