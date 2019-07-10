@@ -127,23 +127,6 @@ class PSMNet(nn.Module):
             self.upsample_disp(pred2, 8, sample_type="linear")
         ]
         pred = pred2
-
-        for i, conv in enumerate(self.fuse_conv):
-            refimg_fea = refimg_fea_list[i+1]
-            targetimg_fea = targetimg_fea_list[i+1]
-
-            pred = self.upsample_disp(pred, 2)
-
-            range_h_w = self.get_range(pred.size()[1], pred.size()[2], pred.device)
-            flow = pred.view(pred.size()[0], pred.size()[1], pred.size()[2], 1) / (pred.size()[2] - 1)
-            zeros = torch.zeros(flow.size(), device=flow.device)
-            flow = (torch.cat((zeros, -flow), dim=-1) + range_h_w) * 2 -1
-
-            targetimg_fea = F.grid_sample(targetimg_fea, flow)
-            feature = torch.cat((refimg_fea, targetimg_fea, torch.unsqueeze(pred, 1)), dim=1)
-            res = conv(feature)
-            pred += torch.squeeze(res, 1)
-            preds.append(self.upsample_disp(pred, 2**(3-i-1), sample_type="linear"))
         
         if self.training:
             return preds
