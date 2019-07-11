@@ -38,16 +38,19 @@ class PSMNet(nn.Module):
             ))
             inplanes = outplanes
 
-        self.classifier = nn.Sequential(
+        self.classifier1 = nn.Sequential(
             nn.Conv3d(outplanes * 2, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
             nn.BatchNorm3d(outplanes),
             nn.ReLU(inplace=True),
             block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-            block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-            block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-            nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         )
+        self.regresser1 = nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
+        self.classifier2 = nn.Sequential(
+            block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+            block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+        )
+        self.regresser2 = nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         
         self.disparityregression = disparityregression(self.maxdisp//8)
 
@@ -61,6 +64,7 @@ class PSMNet(nn.Module):
                 block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
                 block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
                 nn.Conv2d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Sigmoid(),
             ))
             inplanes = outplanes
 
@@ -109,11 +113,21 @@ class PSMNet(nn.Module):
                 cost[:, refimg_fea.size()[1]:, i, :,:]   = targetimg_fea
         cost = cost.contiguous()
 
-        output = self.classifier(cost)
-        output = torch.squeeze(output, 1)
-        pred = F.softmax(output,dim=1)
-        pred = self.disparityregression(pred)
-        preds = [self.upsample_disp(pred, 8, sample_type="linear")]
+        output1 = self.classifier1(cost)
+        pred1 = torch.squeeze(self.regresser1(output1), 1)
+        pred1 = F.softmax(pred1,dim=1)
+        pred1 = self.disparityregression(pred1)
+
+        output2 = self.classifier2(output1)
+        pred2 = torch.squeeze(self.regresser2(output2), 1)
+        pred2 = F.softmax(pred2,dim=1)
+        pred2 = self.disparityregression(pred2)
+        
+        preds = [
+            self.upsample_disp(pred1, 8, sample_type="linear"), 
+            self.upsample_disp(pred2, 8, sample_type="linear")
+        ]
+        pred = pred2
 
         for i, conv in enumerate(self.fuse_conv):
             refimg_fea = refimg_fea_list[i+1]
@@ -129,7 +143,7 @@ class PSMNet(nn.Module):
             targetimg_fea = F.grid_sample(targetimg_fea, flow)
             feature = torch.cat((refimg_fea, targetimg_fea, torch.unsqueeze(pred, 1)), dim=1)
             res = conv(feature)
-            pred += torch.squeeze(res, 1)
+            pred = pred * torch.squeeze(res, 1) * 2
             preds.append(self.upsample_disp(pred, 2**(3-i-1), sample_type="linear"))
         
         if self.training:

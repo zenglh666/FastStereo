@@ -105,7 +105,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     #----
     optimizer.zero_grad()
     
-    if "fasta" in args.model or "fastc" in args.model:
+    if "fasta" in args.model or "fastc" in args.model or "fastd" in args.model:
         outputs = model(imgL,imgR)
         loss = 0.
         for output in outputs:

@@ -126,7 +126,7 @@ class PSMNet(nn.Module):
             self.upsample_disp(pred1, 8, sample_type="linear"), 
             self.upsample_disp(pred2, 8, sample_type="linear")
         ]
-        pred = pred2
+        pred = self.upsample_disp(pred2, 8, sample_type="linear")
         
         if self.training:
             return preds

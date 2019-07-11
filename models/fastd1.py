@@ -39,6 +39,9 @@ class PSMNet(nn.Module):
                 nn.Conv2d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
+                nn.Conv2d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+                nn.BatchNorm2d(outplanes),
+                nn.ReLU(inplace=True),
             ))
             inplanes = outplanes
 
@@ -54,6 +57,9 @@ class PSMNet(nn.Module):
             nn.Conv3d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
             nn.BatchNorm3d(outplanes),
             nn.ReLU(inplace=True),
+            nn.Conv3d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+            nn.BatchNorm3d(outplanes),
+            nn.ReLU(inplace=True),
         )
         self.regresser1 = nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         self.classifier2 = nn.Sequential(
@@ -63,9 +69,15 @@ class PSMNet(nn.Module):
             nn.Conv3d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
             nn.BatchNorm3d(outplanes),
             nn.ReLU(inplace=True),
+            nn.Conv3d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+            nn.BatchNorm3d(outplanes),
+            nn.ReLU(inplace=True),
         )
         self.regresser2 = nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False)
         self.classifier3 = nn.Sequential(
+            nn.Conv3d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
+            nn.BatchNorm3d(outplanes),
+            nn.ReLU(inplace=True),
             nn.Conv3d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
             nn.BatchNorm3d(outplanes),
             nn.ReLU(inplace=True),
@@ -82,6 +94,9 @@ class PSMNet(nn.Module):
             outplanes = inplanes // 2
             self.fuse_conv.append(nn.Sequential(
                 nn.Conv2d(inplanes+1, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.BatchNorm2d(outplanes),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(outplanes, outplanes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
