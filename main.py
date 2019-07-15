@@ -69,6 +69,10 @@ parser.add_argument('--shuffle', action='store_true', default=False,
                     help='shuffle net')
 parser.add_argument('--dilation', type=int, default=1,
                     help='dilation')
+parser.add_argument('--depth', type=int, default=3,
+                    help='depth')
+parser.add_argument('--sequence', type=int, default=3,
+                    help='sequence')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()
@@ -139,11 +143,8 @@ def test(model, args, imgL, imgR, disp_true):
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
 
-    start_time = time.time()
     with torch.no_grad():
         output3 = model(imgL,imgR)
-    torch.cuda.synchronize()
-    per_time = time.time() - start_time
 
     pred_disp = output3
     mask = (disp_true > 0) & (disp_true < args.maxdisp)
@@ -153,9 +154,10 @@ def test(model, args, imgL, imgR, disp_true):
         output = torch.squeeze(pred_disp, 1)
 
         if len(disp_true[mask])==0:
-           loss = 0
+           loss = 0.
         else:
-           loss = torch.mean(torch.abs(output[mask]-disp_true[mask])).item()
+           loss = torch.sum(torch.abs(output[mask]-disp_true[mask])).item()
+        num = torch.sum(mask.float()).item()
     elif args.dataset == "kitti":
         #computing 3-px error#
         disp_true = disp_true[mask]
@@ -163,11 +165,30 @@ def test(model, args, imgL, imgR, disp_true):
         disp = torch.abs(disp_true - pred_disp[mask])
         correct = (disp < 3) | (disp < disp_true * 0.05)
 
-        loss = torch.sum(correct.float()).item() / torch.sum(mask.float()).item()
-        loss = (1 - loss) * 100
+        loss = torch.sum(correct.float()).item()
+        num = torch.sum(mask.float()).item()
 
-    return loss, per_time
+    return loss, num
 
+def runtime(model, args, imgL, imgR, disp_true):
+    model.eval()
+
+    if args.cuda:
+        imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_true.cuda()
+
+    imgL = process2(imgL, args.cuda)
+    imgR = process2(imgR, args.cuda)
+    if args.dataset == 'kitti':
+        disp_true = disp_true.div(256)
+
+    torch.cuda.synchronize()
+    start_time = time.time()
+    with torch.no_grad():
+        output3 = model(imgL,imgR)
+    torch.cuda.synchronize()
+    per_time = time.time() - start_time
+
+    return per_time
 
 def main():
     args = parser.parse_args()
@@ -226,7 +247,11 @@ def main():
 
     TestImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size//2, shuffle=False, num_workers=5, drop_last=False)
+        batch_size=args.batch_size, shuffle=False, num_workers=5, drop_last=False)
+
+    TimeImgLoader = torch.utils.data.DataLoader(
+        DA.ImageFloder(teli*64, teri*64, teld*64, training=False, with_cache=args.with_cache, dataset=args.dataset), 
+        batch_size=args.batch_size, shuffle=False, num_workers=5, drop_last=False)
 
     model = get_model(args)
 
@@ -249,7 +274,6 @@ def main():
 
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.decay_epochs)
 
-    start_full_time = time.time()
     max_loss=1e10
     max_epo=0
     loss_avg = 0.
@@ -257,6 +281,16 @@ def main():
         logger.info('This is %d-th epoch' %(epoch))
         total_train_loss = 0
         scheduler.step()
+
+        ## Timing ##
+        start_time = time.time()
+        if epoch == 1 and args.dataset == "kitti":
+            total_time = 0.
+            for batch_idx, (imgL, imgR, disp_L) in enumerate(TimeImgLoader):
+                per_time= runtime(model, args, imgL,imgR, disp_L)
+                total_time += per_time
+            logger.info('total test time = %.5f, per example time = %.5f' % (
+                time.time() - start_time, total_time / len(TimeImgLoader.dataset)))
 
         ## training ##
         start_time = time.time()
@@ -269,22 +303,25 @@ def main():
                 start_time = time.time()
             total_train_loss += loss
         logger.info('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
-        torch.cuda.empty_cache()
 
         ## TEST ##
-        total_time = 0.
-        total_test_loss = 0
+        start_time = time.time()
+        total_test_loss = 0.
+        total_test_num = 0.
         for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
-            loss, per_time= test(model, args, imgL,imgR, disp_L)
+            loss, num = test(model, args, imgL,imgR, disp_L)
             if (batch_idx + 1) % args.log_steps == 0:
-                logger.info('Iter %d test loss = %.3f' %(batch_idx+1, loss))
+                logger.info('Iter %d test loss = %.5f , time = %.2f' %(
+                    batch_idx + 1, loss/num, time.time() - start_time))
+                start_time = time.time()
             total_test_loss += loss
-            total_time += per_time
+            total_test_num += num
 
-        total_test_loss /= len(TestImgLoader)
-        logger.info('total test loss = %.3f, per example time = %.5f' % (
-            total_test_loss, total_time / len(TestImgLoader.dataset)))
-        torch.cuda.empty_cache()
+        if args.dataset == "kitti":
+            total_test_loss = (1 - total_test_loss / total_test_num) * 100.
+        else:
+            total_test_loss = total_test_loss / total_test_num
+        logger.info('total test loss = %.5f' % total_test_loss)
 
         if total_test_loss < max_loss:
             max_loss = total_test_loss
@@ -296,7 +333,7 @@ def main():
                 'state_dict': model.state_dict(),
                 'test_loss': total_test_loss,
             }, savefilename)
-        logger.info('MAX epoch %d total test error = %.3f' %(max_epo, max_loss))
+        logger.info('MAX epoch %d total test error = %.5f' %(max_epo, max_loss))
 
     logger.info('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
 

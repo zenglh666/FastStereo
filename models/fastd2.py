@@ -43,6 +43,7 @@ class PSMNet(nn.Module):
         self.fusers = nn.ModuleList()
         self.classifiers = nn.ModuleList()
         self.regressers = nn.ModuleList()
+        self.multiplier = 2 ** self.depth
         for i in range(self.sequence):
             self.fusers.append(nn.Sequential(
                 nn.Conv3d(outplanes * 2, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
@@ -53,9 +54,10 @@ class PSMNet(nn.Module):
                 block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
                 block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             ))
-            self.regressers.append(nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False))
+            
+            self.regressers.append(nn.Conv3d(outplanes//self.multiplier, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False))
         
-        self.disparityregression = disparityregression(self.maxdisp//(2**self.depth))
+        self.disparityregression = disparityregression(self.maxdisp)
 
         self.refinements = nn.ModuleList()
         for i in range(self.depth):
@@ -103,10 +105,10 @@ class PSMNet(nn.Module):
         refimg_fea = refimg_fea_list[0]
         targetimg_fea = targetimg_fea_list[0]
         cost = torch.zeros(
-            [refimg_fea.size()[0], refimg_fea.size()[1]*2, self.maxdisp//(2**self.depth),  refimg_fea.size()[2],  refimg_fea.size()[3]],
+            [refimg_fea.size()[0], refimg_fea.size()[1]*2, self.maxdisp//self.multiplier,  refimg_fea.size()[2],  refimg_fea.size()[3]],
             device=refimg_fea.device)
 
-        for i in range(self.maxdisp//(2**self.depth)):
+        for i in range(self.maxdisp//self.multiplier):
             if i > 0 :
                 cost[:, :refimg_fea.size()[1], i, :,i:]   = refimg_fea[:,:,:,i:]
                 cost[:, refimg_fea.size()[1]:, i, :,i:] = targetimg_fea[:,:,:,:-i]
@@ -121,10 +123,11 @@ class PSMNet(nn.Module):
             output = fuser(cost)
             cla = classifier(output)
             cost = torch.cat([output, cla], dim=1)
+            cla = cla.view(cla.size()[0], cla.size()[1]//self.multiplier, self.maxdisp, cla.size()[3], cla.size()[4])
             regress = torch.squeeze(regressor(cla), 1)
             pred = F.softmax(regress,dim=1)
-            pred = self.disparityregression(pred)
-            preds.append(self.upsample_disp(pred, 2**self.depth, sample_type="linear"))
+            pred = self.disparityregression(pred) / self.multiplier
+            preds.append(self.upsample_disp(pred, self.multiplier, sample_type="linear"))
 
         for i, refinement in enumerate(self.refinements):
             refimg_fea = refimg_fea_list[i+1]

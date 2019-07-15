@@ -7,15 +7,34 @@ import math
 import numpy as np
 
 class ResBlock3D(nn.Module):
-    def __init__(self, planes, kernel_size, stride, padding, dilation):
+    def __init__(self, planes, kernel_size, stride, padding, dilation, groups=1):
         super(ResBlock3D, self).__init__()
         self.block = nn.Sequential(
             nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=stride, 
-                padding=padding, dilation=dilation, bias=False),
+                padding=padding, dilation=dilation, groups=groups, bias=False),
             nn.BatchNorm3d(planes),
             nn.ReLU(inplace=True),
             nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=1, 
                 padding=padding, dilation=dilation, bias=False),
+            nn.BatchNorm3d(planes),
+        )
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        y = self.block(x) + x
+        y = self.relu(y)
+        return y
+
+class ResBlock3Dv2(nn.Module):
+    def __init__(self, planes, kernel_size, stride, padding, dilation, groups=1):
+        super(ResBlock3Dv2, self).__init__()
+        self.block = nn.Sequential(
+            nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=stride, 
+                padding=padding, dilation=dilation, groups=groups, bias=False),
+            nn.BatchNorm3d(planes),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(planes, planes, kernel_size=kernel_size, stride=1, 
+                padding=padding, dilation=dilation, groups=groups, bias=False),
             nn.BatchNorm3d(planes),
         )
         self.relu = nn.ReLU(inplace=True)
