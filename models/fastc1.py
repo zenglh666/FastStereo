@@ -30,50 +30,46 @@ class PSMNet(nn.Module):
         self.unet_conv = nn.ModuleList()
         inplanes = args.planes
         for i in range(self.depth):
-            outplanes = inplanes * 2
+            if i != self.depth - 1:
+                outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
                 nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
             ))
             inplanes = outplanes
 
-        self.merge_cost = nn.Sequential(
-            nn.Conv3d(outplanes * 2, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
-            nn.BatchNorm3d(outplanes),
-            nn.ReLU(inplace=True),
-        )
         self.fusers = nn.ModuleList()
         self.classifiers = nn.ModuleList()
         self.regressers = nn.ModuleList()
-        self.multiplier = 2 ** self.depth
-        planes = outplanes // self.multiplier
         for i in range(self.sequence):
             self.fusers.append(nn.Sequential(
-                nn.Conv3d(planes * 2, planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
-                nn.BatchNorm3d(planes),
+                nn.Conv3d(outplanes * 2, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
             ))
             self.classifiers.append(nn.Sequential(
-                block3d(planes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                block3d(planes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+                block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+                block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             ))
-            self.regressers.append(nn.Conv3d(planes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False))
+            self.regressers.append(nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False))
         
-        self.disparityregression = disparityregression(self.maxdisp)
+        self.disparityregression = disparityregression(self.maxdisp//(2**self.depth))
 
         self.refinements = nn.ModuleList()
         for i in range(self.depth):
-            outplanes = inplanes // 2
+            if i != 0:
+                outplanes = inplanes // 2
             self.refinements.append(nn.Sequential(
-                nn.Conv2d(inplanes+1, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Conv2d(outplanes, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
                 nn.Conv2d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Tanh()
             ))
             inplanes = outplanes
 
@@ -110,10 +106,10 @@ class PSMNet(nn.Module):
         refimg_fea = refimg_fea_list[0]
         targetimg_fea = targetimg_fea_list[0]
         cost = torch.zeros(
-            [refimg_fea.size()[0], refimg_fea.size()[1]*2, self.maxdisp//self.multiplier,  refimg_fea.size()[2],  refimg_fea.size()[3]],
+            [refimg_fea.size()[0], refimg_fea.size()[1]*2, self.maxdisp//(2**self.depth),  refimg_fea.size()[2],  refimg_fea.size()[3]],
             device=refimg_fea.device)
 
-        for i in range(self.maxdisp//self.multiplier):
+        for i in range(self.maxdisp//(2**self.depth)):
             if i > 0 :
                 cost[:, :refimg_fea.size()[1], i, :,i:]   = refimg_fea[:,:,:,i:]
                 cost[:, refimg_fea.size()[1]:, i, :,i:] = targetimg_fea[:,:,:,:-i]
@@ -124,15 +120,14 @@ class PSMNet(nn.Module):
 
         preds = []
         regress = 0.
-        output = self.merge_cost(cost)
-        output = output.view(output.size()[0], output.size()[1]//self.multiplier, self.maxdisp, output.size()[3], output.size()[4])
         for fuser, classifier, regressor in zip(self.fusers, self.classifiers, self.regressers):
+            output = fuser(cost)
             cla = classifier(output)
-            output = fuser(torch.cat([output, cla], dim=1))
-            regress = torch.squeeze(regressor(output), 1)
+            cost = torch.cat([output, cla], dim=1)
+            regress = torch.squeeze(regressor(cla), 1)
             pred = F.softmax(regress,dim=1)
-            pred = self.disparityregression(pred) / self.multiplier
-            preds.append(self.upsample_disp(pred, self.multiplier, sample_type="linear"))
+            pred = self.disparityregression(pred)
+            preds.append(self.upsample_disp(pred, 2**self.depth, sample_type="linear"))
 
         for i, refinement in enumerate(self.refinements):
             refimg_fea = refimg_fea_list[i+1]
@@ -140,15 +135,8 @@ class PSMNet(nn.Module):
 
             pred = self.upsample_disp(pred, 2)
 
-            range_h_w = self.get_range(pred.size()[1], pred.size()[2], pred.device)
-            flow = pred.view(pred.size()[0], pred.size()[1], pred.size()[2], 1) / (pred.size()[2] - 1)
-            zeros = torch.zeros(flow.size(), device=flow.device)
-            flow = (torch.cat((zeros, -flow), dim=-1) + range_h_w) * 2 -1
-
-            targetimg_fea = F.grid_sample(targetimg_fea, flow)
-            feature = torch.cat((refimg_fea, targetimg_fea, torch.unsqueeze(pred, 1)), dim=1)
-            res = refinement(feature)
-            pred = pred + torch.squeeze(res, 1)
+            res = refinement(refimg_fea)
+            pred = pred * torch.squeeze(res + 1, 1)
             preds.append(self.upsample_disp(pred, 2**(self.depth-i-1), sample_type="linear"))
         
         if self.training:

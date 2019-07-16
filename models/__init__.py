@@ -28,6 +28,8 @@ from .fastc8 import PSMNet as fastc8
 from .fastc9 import PSMNet as fastc9
 from .fastd1 import PSMNet as fastd1
 from .fastd2 import PSMNet as fastd2
+from .fastd3 import PSMNet as fastd3
+from .fastd4 import PSMNet as fastd4
 
 def get_model(args):
     if args.model == 'stackhourglass':
@@ -92,6 +94,10 @@ def get_model(args):
         model = fastd1(args)
     elif args.model == 'fastd2':
         model = fastd2(args)
+    elif args.model == 'fastd3':
+        model = fastd3(args)
+    elif args.model == 'fastd4':
+        model = fastd4(args)
     else:
         raise ValueError('no much model')
     return model

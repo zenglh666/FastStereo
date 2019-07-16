@@ -73,6 +73,8 @@ parser.add_argument('--depth', type=int, default=3,
                     help='depth')
 parser.add_argument('--sequence', type=int, default=3,
                     help='sequence')
+parser.add_argument('--loss-weights', action='store_true', default=False,
+                    help='loss-weights')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()
@@ -92,7 +94,7 @@ def process2(img, cuda):
     img = img / std
     return img
 
-def train(model, optimizer, args, imgL,imgR, disp_true):
+def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     model.train()
 
     if args.cuda:
@@ -111,10 +113,25 @@ def train(model, optimizer, args, imgL,imgR, disp_true):
     
     if "fasta" in args.model or "fastc" in args.model or "fastd" in args.model:
         outputs = model(imgL,imgR)
-        loss = 0.
-        for output in outputs:
-            output = torch.squeeze(output,1)
-            loss += F.smooth_l1_loss(output[mask], disp_true) 
+        if args.loss_weights and epoch is not None:
+            loss_weights = []
+            half_procedure = float(args.epochs) / 2.
+            step = half_procedure / float(len(outputs) - 1)
+            for i in range(1, len(outputs)):
+                should_decay_epochs = max(float(epoch) - step * i, 0.)
+                loss_weights.append(max(1. - should_decay_epochs / half_procedure, 0.))
+            loss_weights.append(1.)
+            ws = sum(loss_weights)
+            loss_weights = [w / ws for w in loss_weights]
+            loss = 0.
+            for output, w in zip(outputs, loss_weights):
+                output = torch.squeeze(output,1)
+                loss += w * F.smooth_l1_loss(output[mask], disp_true) 
+        else:
+            loss = 0.
+            for output in outputs:
+                output = torch.squeeze(output,1)
+                loss += F.smooth_l1_loss(output[mask], disp_true) 
     elif "fastb" in args.model:
         output = model(imgL,imgR)
         loss = F.smooth_l1_loss(output[mask], disp_true) 
@@ -295,7 +312,7 @@ def main():
         ## training ##
         start_time = time.time()
         for batch_idx, (imgL_crop, imgR_crop, disp_crop_L) in enumerate(TrainImgLoader):
-            loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L)
+            loss = train(model, optimizer, args, imgL_crop,imgR_crop, disp_crop_L, epoch=epoch)
             loss_avg = 0.99 * loss_avg + 0.01 * loss
             if (batch_idx + 1) % args.log_steps == 0:
                 logger.info('Iter %d training loss = %.3f , time = %.2f' %(
@@ -334,8 +351,6 @@ def main():
                 'test_loss': total_test_loss,
             }, savefilename)
         logger.info('MAX epoch %d total test error = %.5f' %(max_epo, max_loss))
-
-    logger.info('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
 
 if __name__ == '__main__':
    main()

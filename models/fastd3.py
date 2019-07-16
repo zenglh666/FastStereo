@@ -69,6 +69,7 @@ class PSMNet(nn.Module):
                 block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
                 block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
                 nn.Conv2d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Tanh()
             ))
             inplanes = outplanes
 
@@ -142,7 +143,7 @@ class PSMNet(nn.Module):
             targetimg_fea = F.grid_sample(targetimg_fea, flow)
             feature = torch.cat((refimg_fea, targetimg_fea, torch.unsqueeze(pred, 1)), dim=1)
             res = refinement(feature)
-            pred = pred + torch.squeeze(res, 1)
+            pred = pred * torch.squeeze(res + 1, 1)
             preds.append(self.upsample_disp(pred, 2**(self.depth-i-1), sample_type="linear"))
         
         if self.training:
