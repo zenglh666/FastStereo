@@ -73,6 +73,8 @@ parser.add_argument('--depth', type=int, default=3,
                     help='depth')
 parser.add_argument('--sequence', type=int, default=3,
                     help='sequence')
+parser.add_argument('--flood', type=int, default=1,
+                    help='flood')
 parser.add_argument('--loss-weights', action='store_true', default=False,
                     help='loss-weights')
 
@@ -121,8 +123,6 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
                 should_decay_epochs = max(float(epoch) - step * i, 0.)
                 loss_weights.append(max(1. - should_decay_epochs / half_procedure, 0.))
             loss_weights.append(1.)
-            ws = sum(loss_weights)
-            loss_weights = [w / ws for w in loss_weights]
             loss = 0.
             for output, w in zip(outputs, loss_weights):
                 output = torch.squeeze(output,1)

@@ -16,9 +16,11 @@ class PSMNet(nn.Module):
             block3d = ResBlock3DShuffle
             block2d = ResBlockShuffle
         else:
-            block3d = ResBlock3Dv2
+            block3d = ResBlock3D
             block2d = ResBlock
-        self.depth = 3
+        self.depth = args.depth
+        self.sequence = args.sequence
+        self.flood = args.flood
 
         self.first_conv = nn.Sequential(
             nn.Conv2d(3, args.planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
@@ -29,28 +31,29 @@ class PSMNet(nn.Module):
         self.unet_conv = nn.ModuleList()
         inplanes = args.planes
         for i in range(self.depth):
-            outplanes = inplanes * 2
+            if i != self.depth - 1:
+                outplanes = inplanes * 2
             self.unet_conv.append(nn.Sequential(
                 nn.Conv2d(inplanes, outplanes, kernel_size=3, stride=2, padding=1, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
             ))
             inplanes = outplanes
 
         self.fusers = nn.ModuleList()
         self.classifiers = nn.ModuleList()
         self.regressers = nn.ModuleList()
-        for i in range(3):
+        for i in range(self.sequence):
             self.fusers.append(nn.Sequential(
                 nn.Conv3d(outplanes * 2, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
                 nn.BatchNorm3d(outplanes),
                 nn.ReLU(inplace=True),
             ))
             self.classifiers.append(nn.Sequential(
-                block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation, groups=4),
-                block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation, groups=4),
+                block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
+                block3d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
             ))
             self.regressers.append(nn.Conv3d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False))
         
@@ -58,14 +61,17 @@ class PSMNet(nn.Module):
 
         self.refinements = nn.ModuleList()
         for i in range(self.depth):
-            outplanes = inplanes // 2
+            if i != 0:
+                outplanes = inplanes // 2
             self.refinements.append(nn.Sequential(
-                nn.Conv2d(inplanes+1, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Conv2d(outplanes, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
                 nn.BatchNorm2d(outplanes),
                 nn.ReLU(inplace=True),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-                nn.Conv2d(outplanes, 1, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
+                block2d(outplanes, kernel_size=3, stride=1, padding=1, dilation=1),
+                nn.Conv2d(outplanes, (2*self.flood + 1)*(2*self.flood + 1), 
+                    kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+                nn.Sigmoid()
             ))
             inplanes = outplanes
 
@@ -123,23 +129,18 @@ class PSMNet(nn.Module):
             regress = torch.squeeze(regressor(cla), 1)
             pred = F.softmax(regress,dim=1)
             pred = self.disparityregression(pred)
-            preds.append(self.upsample_disp(pred, 8, sample_type="linear"))
+            preds.append(self.upsample_disp(pred, 2**self.depth, sample_type="linear"))
 
         for i, refinement in enumerate(self.refinements):
             refimg_fea = refimg_fea_list[i+1]
             targetimg_fea = targetimg_fea_list[i+1]
 
             pred = self.upsample_disp(pred, 2)
+            nearest = self.get_nearest(pred)
 
-            range_h_w = self.get_range(pred.size()[1], pred.size()[2], pred.device)
-            flow = pred.view(pred.size()[0], pred.size()[1], pred.size()[2], 1) / (pred.size()[2] - 1)
-            zeros = torch.zeros(flow.size(), device=flow.device)
-            flow = (torch.cat((zeros, -flow), dim=-1) + range_h_w) * 2 -1
-
-            targetimg_fea = F.grid_sample(targetimg_fea, flow)
-            feature = torch.cat((refimg_fea, targetimg_fea, torch.unsqueeze(pred, 1)), dim=1)
-            res = refinement(feature)
-            pred = pred + torch.squeeze(res, 1)
+            coff = refinement(refimg_fea)
+            nearest = nearest * coff * 2
+            pred = torch.sum(nearest, dim=1) / torch.sum(coff * 2, dim=1)
             preds.append(self.upsample_disp(pred, 2**(self.depth-i-1), sample_type="linear"))
         
         if self.training:
@@ -161,6 +162,37 @@ class PSMNet(nn.Module):
                 disp = F.interpolate(disp, scale_factor=ratio, mode='bilinear') * ratio
                 disp = torch.squeeze(disp, 1)
         return disp
+
+    def get_nearest(self, disp):
+        output = torch.zeros(
+            [disp.size()[0], (2*self.flood + 1)*(2*self.flood + 1), disp.size()[1], disp.size()[2]],
+            device=disp.device)
+        for i in range(-self.flood, self.flood+1):
+            k = i + self.flood
+            for j in range(-self.flood, self.flood+1):
+                l = j + self.flood
+                if i < 0:
+                    if j < 0:
+                        output[:,k * (2 * self.flood + 1) + l,-i:,-j:] = disp[:, :i, :j]
+                    elif j == 0:
+                        output[:,k * (2 * self.flood + 1) + l,-i:,:] = disp[:, :i, :]
+                    else:
+                        output[:,k * (2 * self.flood + 1) + l,-i:,:-j] = disp[:, :i, j:]
+                elif i == 0:
+                    if j < 0:
+                        output[:,k * (2 * self.flood + 1) + l,:,-j:] = disp[:, :, :j]
+                    elif j == 0:
+                        output[:,k * (2 * self.flood + 1) + l,:,:] = disp[:, :, :]
+                    else:
+                        output[:,k * (2 * self.flood + 1) + l,:,:-j] = disp[:, :, j:]
+                else: 
+                    if j < 0:
+                        output[:,k * (2 * self.flood + 1) + l,:-i,-j:] = disp[:, i:, :j]
+                    elif j == 0:
+                        output[:,k * (2 * self.flood + 1) + l,:-i,:] = disp[:, i:, :]
+                    else:
+                        output[:,k * (2 * self.flood + 1) + l,:-i,:-j] = disp[:, i:, j:]
+        return output.contiguous()
 
     def get_range(self, h, w, device):
         range_h =  torch.arange(h, dtype=torch.float32, device=device) / (h - 1)
