@@ -138,7 +138,7 @@ class PSMNet(nn.Module):
             pred = self.upsample_disp(pred, 2)
             nearest = self.get_nearest(pred)
 
-            coff = refinement(refimg_fea)
+            coff = refinement(refimg_fea) + 0.001
             nearest = nearest * coff * 2
             pred = torch.sum(nearest, dim=1) / torch.sum(coff * 2, dim=1)
             preds.append(self.upsample_disp(pred, 2**(self.depth-i-1), sample_type="linear"))
