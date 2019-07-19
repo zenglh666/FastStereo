@@ -73,7 +73,7 @@ parser.add_argument('--depth', type=int, default=3,
                     help='depth')
 parser.add_argument('--sequence', type=int, default=3,
                     help='sequence')
-parser.add_argument('--flood', type=int, default=1,
+parser.add_argument('--flood', type=int, default=4,
                     help='flood')
 parser.add_argument('--loss-weights', action='store_true', default=False,
                     help='loss-weights')
