@@ -77,6 +77,8 @@ parser.add_argument('--flood', type=int, default=4,
                     help='flood')
 parser.add_argument('--loss-weights', action='store_true', default=False,
                     help='loss-weights')
+parser.add_argument('--no-train-aug', action='store_false', default=True,
+                    help='no-train-aug')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()
@@ -259,7 +261,7 @@ def main():
                 trld.extend(trld15 + teld15)
 
     TrainImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(trli, trri, trld, training=True, with_cache=args.with_cache, dataset=args.dataset), 
+        DA.ImageFloder(trli, trri, trld, training=args.no_train_aug, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=True, num_workers=5, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(

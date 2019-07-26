@@ -23,19 +23,13 @@ class PSMNet(nn.Module):
         self.flood = args.flood
 
         self.first_conv = nn.Sequential(
-            nn.Conv2d(3, args.planes*2, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
-            nn.BatchNorm2d(args.planes*2),
-            nn.ReLU(inplace=True),
-        )
-        self.first_fuse = nn.Sequential(
-            nn.Conv2d(args.planes*2, args.planes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
+            nn.Conv2d(3, args.planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False),
             nn.BatchNorm2d(args.planes),
             nn.ReLU(inplace=True),
         )
 
         self.unet_feature = nn.ModuleList()
         self.unet_downsample = nn.ModuleList()
-        self.unet_fuse = nn.ModuleList()
         inplanes = args.planes
         outplanes = inplanes
         for i in range(self.depth):
@@ -49,11 +43,6 @@ class PSMNet(nn.Module):
             self.unet_feature.append(nn.Sequential(
                 block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
                 block2d(outplanes, kernel_size=3, stride=1, padding=args.dilation, dilation=args.dilation),
-            ))
-            self.unet_fuse.append(nn.Sequential(
-                nn.Conv2d(outplanes*2, outplanes, kernel_size=1, stride=1, padding=0, dilation=1, bias=False),
-                nn.BatchNorm2d(outplanes),
-                nn.ReLU(inplace=True),
             ))
             inplanes = outplanes
 
@@ -110,20 +99,14 @@ class PSMNet(nn.Module):
 
         refimg_fea = self.first_conv(left)
         targetimg_fea = self.first_conv(right)
-        refimg_fea = self.first_fuse(refimg_fea)
-        targetimg_fea = self.first_fuse(targetimg_fea)
         refimg_fea_list.append(refimg_fea)
         targetimg_fea_list.append(targetimg_fea)
 
-        for down, fea, fuse in zip(self.unet_downsample, self.unet_feature, self.unet_fuse):
+        for down, fea in zip(self.unet_downsample, self.unet_feature):
             refimg_down = down(refimg_fea)
             targetimg_down = down(targetimg_fea)
             refimg_fea = fea(refimg_down)
             targetimg_fea = fea(targetimg_down)
-            refimg_fea = torch.cat((refimg_down, refimg_fea),dim=1)
-            targetimg_fea = torch.cat((targetimg_down, targetimg_fea),dim=1)
-            refimg_fea = fuse(refimg_fea)
-            targetimg_fea = fuse(targetimg_fea)
             refimg_fea_list.append(refimg_fea)
             targetimg_fea_list.append(targetimg_fea)
 
