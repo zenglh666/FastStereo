@@ -60,6 +60,8 @@ parser.add_argument('--learning-rate', type=float, default=0.001,
                     help='learning rate')
 parser.add_argument('--weight-decay', type=float, default=0.0,
                     help='learning rate')
+parser.add_argument('--source-drop', type=float, default=0.0,
+                    help='learning rate')
 
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
@@ -108,6 +110,10 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     imgR = process2(imgR, args.cuda)
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
+
+    if args.source_drop > 0.:
+        imgL = torch.nn.functional.dropout(imgL, p=args.source_drop)
+        imgR = torch.nn.functional.dropout(imgR, p=args.source_drop)
     #---------
     mask = (disp_true > 0) & (disp_true < args.maxdisp)
     mask.detach()

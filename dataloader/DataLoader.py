@@ -3,6 +3,7 @@ import torch
 import torch.utils.data as data
 import random
 from PIL import Image
+from PIL import ImageOps
 from io import BytesIO
 import numpy as np
 import re
@@ -101,6 +102,7 @@ class ImageFloder(data.Dataset):
         dataL = self.dploader(disp_L)
 
         if self.training:
+            '''
             th, tw = 256, 512
             w, h = left_img.size
             x1 = random.randint(0, w - tw)
@@ -109,6 +111,20 @@ class ImageFloder(data.Dataset):
             left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
             dataL = dataL.crop((x1, y1, x1 + tw, y1 + th))
+            '''
+            w, h = left_img.size
+            left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+            right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+            dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
+            w, h = left_img.size
+            left_img = ImageOps.expand(left_img, border=8, fill=0)
+            right_img = ImageOps.expand(right_img, border=8, fill=0)
+            dataL = ImageOps.expand(dataL, border=8, fill=0)
+            x1 = random.randint(0, 16)
+            y1 = random.randint(0, 16)
+            left_img = left_img.crop((x1, y1, x1 + w, y1 + h))
+            right_img = right_img.crop((x1, y1, x1 + w, y1 + h))
+            dataL = dataL.crop((x1, y1, x1 + w, y1 + h))
         else:
             w, h = left_img.size
             left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
