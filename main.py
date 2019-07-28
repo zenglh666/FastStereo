@@ -62,6 +62,8 @@ parser.add_argument('--weight-decay', type=float, default=0.0,
                     help='learning rate')
 parser.add_argument('--source-drop', type=float, default=0.0,
                     help='learning rate')
+parser.add_argument('--source-noise', type=float, default=0.0,
+                    help='learning rate')
 
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
@@ -94,9 +96,17 @@ def process(img, cuda):
 
 def process2(img, cuda):
     img = img.transpose(1,3).transpose(2,3)
-    mean = torch.mean(img)
+    mean = torch.mean(img, dim=[1,2,3], keepdim=True)
     img_mean = img - mean
-    std = torch.mean(img_mean * img_mean)
+    std = torch.mean(img_mean * img_mean, dim=[1,2,3], keepdim=True)
+    img = img / std
+    return img
+
+def process3(img, cuda):
+    img = img.transpose(1,3).transpose(2,3)
+    mean = torch.mean(img, dim=[2,3], keepdim=True)
+    img_mean = img - mean
+    std = torch.mean(img_mean * img_mean, dim=[2,3], keepdim=True)
     img = img / std
     return img
 
@@ -114,6 +124,10 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     if args.source_drop > 0.:
         imgL = torch.nn.functional.dropout(imgL, p=args.source_drop)
         imgR = torch.nn.functional.dropout(imgR, p=args.source_drop)
+
+    if args.source_noise > 0.:
+        imgL = imgL + (torch.rand_like(imgL) - 0.5) * args.source_noise
+        imgR = imgR + (torch.rand_like(imgR) - 0.5) * args.source_noise
     #---------
     mask = (disp_true > 0) & (disp_true < args.maxdisp)
     mask.detach()
@@ -124,6 +138,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     if "fasta" in args.model or "fastc" in args.model or "fastd" in args.model:
         outputs = model(imgL,imgR)
         if args.loss_weights and epoch is not None:
+            '''
             loss_weights = []
             half_procedure = float(args.epochs) / 2.
             step = half_procedure / float(len(outputs) - 1)
@@ -135,6 +150,15 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
             for output, w in zip(outputs, loss_weights):
                 output = torch.squeeze(output,1)
                 loss += w * F.smooth_l1_loss(output[mask], disp_true) 
+            '''
+            loss = 0.
+            if epoch < args.decay_epochs:
+                for output in outputs:
+                    output = torch.squeeze(output,1)
+                    loss += F.smooth_l1_loss(output[mask], disp_true) 
+            else:
+                output = outputs[-1]
+                loss = F.smooth_l1_loss(output[mask], disp_true) 
         else:
             loss = 0.
             for output in outputs:
@@ -201,8 +225,8 @@ def runtime(model, args, imgL, imgR, disp_true):
     if args.cuda:
         imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_true.cuda()
 
-    imgL = process2(imgL, args.cuda)
-    imgR = process2(imgR, args.cuda)
+    imgL = process3(imgL, args.cuda)
+    imgR = process3(imgR, args.cuda)
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
 
