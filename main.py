@@ -62,7 +62,9 @@ parser.add_argument('--weight-decay', type=float, default=0.0,
                     help='learning rate')
 parser.add_argument('--source-drop', type=float, default=0.0,
                     help='learning rate')
-parser.add_argument('--source-noise', type=float, default=0.0,
+parser.add_argument('--source-channel-noise', type=float, default=0.0,
+                    help='learning rate')
+parser.add_argument('--source-image-noise', type=float, default=0.0,
                     help='learning rate')
 
 parser.add_argument('--maxdisp', type=int ,default=192,
@@ -110,6 +112,14 @@ def process3(img, cuda):
     img = img / std
     return img
 
+def process4(img, cuda):
+    img = img.transpose(1,3).transpose(2,3)
+    mean = torch.mean(img)
+    img_mean = img - mean
+    std = torch.mean(img_mean * img_mean)
+    img = img / std
+    return img
+
 def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     model.train()
 
@@ -125,9 +135,21 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
         imgL = torch.nn.functional.dropout(imgL, p=args.source_drop)
         imgR = torch.nn.functional.dropout(imgR, p=args.source_drop)
 
-    if args.source_noise > 0.:
-        imgL = imgL + (torch.rand_like(imgL) - 0.5) * args.source_noise
-        imgR = imgR + (torch.rand_like(imgR) - 0.5) * args.source_noise
+    if args.source_channel_noise > 0.:
+
+        noise = torch.rand((imgL.size()[0], imgL.size()[1]), dtype=imgL.dtype, device=imgL.device).view(
+            imgL.size()[0], imgL.size()[1], 1, 1)
+        noise = (noise - 0.5) * args.source_channel_noise
+        imgL = imgL + noise
+        imgR = imgR + noise
+
+    if args.source_image_noise > 0.:
+        noise = torch.rand((imgL.size()[0]), dtype=imgL.dtype, device=imgL.device).view(
+            imgL.size()[0], 1, 1, 1)
+        noise = (noise - 0.5) * args.source_image_noise
+        imgL = imgL + noise
+        imgR = imgR + noise
+
     #---------
     mask = (disp_true > 0) & (disp_true < args.maxdisp)
     mask.detach()
