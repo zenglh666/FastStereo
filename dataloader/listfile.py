@@ -105,17 +105,13 @@ def list_kitti_file(filepath, date):
 
     image = [img for img in os.listdir(os.path.join(filepath, left_fold)) if img.find('_10') > -1]
 
-    if date == '2015':
-        val_set = [1,3,6,20,26,35,38,41,43,44,49,60,67,70,81,84,89,97,109,119,122,123,
-            129,130,132,134,141,144,152,158,159,165,171,174,179,182, 184,186,187,196]
-        image = np.array(sorted(image))
-        val_bool = np.zeros_like(image, dtype=np.bool)
-        val_bool[val_set] = True
-        train = image[~val_bool]
-        val   = image[val_bool]
-    else:
-        train = image[:160]
-        val   = image[160:]
+    val_set = [1,3,6,20,26,35,38,41,43,44,49,60,67,70,81,84,89,97,109,119,122,123,
+        129,130,132,134,141,144,152,158,159,165,171,174,179,182, 184,186,187,196]
+    image = np.array(sorted(image))
+    val_bool = np.zeros_like(image, dtype=np.bool)
+    val_bool[val_set] = True
+    train = image[~val_bool]
+    val   = image[val_bool]
 
     left_train  = [os.path.join(filepath, left_fold, img) for img in train]
     right_train = [os.path.join(filepath, right_fold, img) for img in train]
@@ -126,3 +122,18 @@ def list_kitti_file(filepath, date):
     disp_val_L = [os.path.join(filepath, disp_L, img) for img in val]
 
     return left_train, right_train, disp_train_L, left_val, right_val, disp_val_L
+
+def list_kitti_test_file(filepath, date):
+    if date == "2015":
+        left_fold  = 'image_2'
+        right_fold = 'image_3'
+    elif date == "2012":
+        left_fold  = 'colored_0'
+        right_fold = 'colored_1'
+
+    image = [img for img in os.listdir(os.path.join(filepath, left_fold)) if img.find('_10') > -1]
+
+    left  = [os.path.join(filepath, left_fold, img) for img in image]
+    right = [os.path.join(filepath, right_fold, img) for img in image]
+
+    return left, right
