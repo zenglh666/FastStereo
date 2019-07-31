@@ -98,15 +98,16 @@ def list_kitti_file(filepath, date):
         left_fold  = 'image_2'
         right_fold = 'image_3'
         disp_L = 'disp_occ_0'
+        val_set = [1,3,6,20,26,35,38,41,43,44,49,60,67,70,81,84,89,97,109,119,122,123,
+            129,130,132,134,141,144,152,158,159,165,171,174,179,182, 184,186,187,196]
     elif date == "2012":
         left_fold  = 'colored_0'
         right_fold = 'colored_1'
         disp_L   = 'disp_occ'
+        val_set = [1,3,6,20,26,35,38,41,43,44,49,60,67,70,81,84,89,97,109,119,122,123,
+            129,130,132,134,141,144,152,158,159,165,171,174,179,182, 184,186,187,193]
 
     image = [img for img in os.listdir(os.path.join(filepath, left_fold)) if img.find('_10') > -1]
-
-    val_set = [1,3,6,20,26,35,38,41,43,44,49,60,67,70,81,84,89,97,109,119,122,123,
-        129,130,132,134,141,144,152,158,159,165,171,174,179,182, 184,186,187,196]
     image = np.array(sorted(image))
     val_bool = np.zeros_like(image, dtype=np.bool)
     val_bool[val_set] = True
