@@ -64,6 +64,12 @@ parser.add_argument('--source-channel-noise', type=float, default=0.0,
                     help='learning rate')
 parser.add_argument('--source-image-noise', type=float, default=0.0,
                     help='learning rate')
+parser.add_argument('--loss-weights', action='store_true', default=False,
+                    help='loss-weights')
+parser.add_argument('--no-train-aug', action='store_false', default=True,
+                    help='no-train-aug')
+parser.add_argument('--all-train', action='store_true', default=False,
+                    help='no-train-aug')
 
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
@@ -79,10 +85,7 @@ parser.add_argument('--sequence', type=int, default=3,
                     help='sequence')
 parser.add_argument('--flood', type=int, default=4,
                     help='flood')
-parser.add_argument('--loss-weights', action='store_true', default=False,
-                    help='loss-weights')
-parser.add_argument('--no-train-aug', action='store_false', default=True,
-                    help='no-train-aug')
+
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()
@@ -261,6 +264,10 @@ def main():
         trli, trri, trld, teli, teri, teld = lt.list_flow_file(args.datapath)
     else:
         trli, trri, trld, teli, teri, teld = lt.list_kitti_file(args.datapath, args.date)
+    if args.all_train:
+        trli.extend(teli)
+        trri.extend(teri)
+        trld.extend(teld)
 
     TrainImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(trli, trri, trld, training=args.no_train_aug, with_cache=args.with_cache, dataset=args.dataset), 

@@ -207,7 +207,7 @@ def main():
         img = pred_disp[top_pad:,:-left_pad]
         img = Image.fromarray((img*256).astype('uint16'))
         img.save(os.path.join(savepath, left.split('/')[-1]))
-    logger.info('per example time = %.5f' % all_time / len(teli))
+    logger.info('per example time = %.5f' % (all_time / len(teli)))
 
 if __name__ == '__main__':
    main()
