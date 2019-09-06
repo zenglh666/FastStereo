@@ -73,7 +73,7 @@ parser.add_argument('--all-train', action='store_true', default=False,
 
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
-parser.add_argument('--planes', type=int, default=64,
+parser.add_argument('--planes', type=int, default=32,
                     help='planes')
 parser.add_argument('--shuffle', action='store_true', default=False,
                     help='shuffle net')
@@ -86,6 +86,8 @@ parser.add_argument('--sequence', type=int, default=3,
 parser.add_argument('--flood', type=int, default=4,
                     help='flood')
 
+parser.add_argument('--downsample', type=float, default=1.,
+                    help='downsample')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()
@@ -158,7 +160,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     #----
     optimizer.zero_grad()
     
-    if "fasta" in args.model or "fastc" in args.model or "fastd" in args.model:
+    if "fasta" in args.model or "fastc" in args.model or "fastd" in args.model or "faste" in args.model:
         outputs = model(imgL,imgR)
         if args.loss_weights and epoch is not None:
             loss = 0.

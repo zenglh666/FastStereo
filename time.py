@@ -1,7 +1,7 @@
 import argparse
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 import random
 import torch
@@ -74,7 +74,7 @@ parser.add_argument('--source-image-noise', type=float, default=0.0,
 
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
-parser.add_argument('--planes', type=int, default=64,
+parser.add_argument('--planes', type=int, default=32,
                     help='planes')
 parser.add_argument('--shuffle', action='store_true', default=False,
                     help='shuffle net')
@@ -90,6 +90,9 @@ parser.add_argument('--loss-weights', action='store_true', default=False,
                     help='loss-weights')
 parser.add_argument('--no-train-aug', action='store_false', default=True,
                     help='no-train-aug')
+
+parser.add_argument('--downsample', type=float, default=1.,
+                    help='downsample')
 
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()

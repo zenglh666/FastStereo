@@ -178,35 +178,37 @@ class PSMNet(nn.Module):
     def __init__(self, args):
         super(PSMNet, self).__init__()
         self.maxdisp = args.maxdisp
+        self.downsample = args.downsample
+        self.planes = args.planes
 
         self.feature_extraction = feature_extraction()
 
-        self.dres0 = nn.Sequential(convbn_3d(64, 32, 3, 1, 1),
+        self.dres0 = nn.Sequential(convbn_3d(64, self.planes, 3, 1, 1),
                                      nn.ReLU(inplace=True),
-                                     convbn_3d(32, 32, 3, 1, 1),
+                                     convbn_3d(self.planes, self.planes, 3, 1, 1),
                                      nn.ReLU(inplace=True))
 
-        self.dres1 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
+        self.dres1 = nn.Sequential(convbn_3d(self.planes, self.planes, 3, 1, 1),
                                    nn.ReLU(inplace=True),
-                                   convbn_3d(32, 32, 3, 1, 1)) 
+                                   convbn_3d(self.planes, self.planes, 3, 1, 1)) 
 
-        self.dres2 = hourglass(32)
+        self.dres2 = hourglass(self.planes)
 
-        self.dres3 = hourglass(32)
+        self.dres3 = hourglass(self.planes)
 
-        self.dres4 = hourglass(32)
+        self.dres4 = hourglass(self.planes)
 
-        self.classif1 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
+        self.classif1 = nn.Sequential(convbn_3d(self.planes, self.planes, 3, 1, 1),
                                       nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False))
+                                      nn.Conv3d(self.planes, 1, kernel_size=3, padding=1, stride=1,bias=False))
 
-        self.classif2 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
+        self.classif2 = nn.Sequential(convbn_3d(self.planes, self.planes, 3, 1, 1),
                                       nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False))
+                                      nn.Conv3d(self.planes, 1, kernel_size=3, padding=1, stride=1,bias=False))
 
-        self.classif3 = nn.Sequential(convbn_3d(32, 32, 3, 1, 1),
+        self.classif3 = nn.Sequential(convbn_3d(self.planes, self.planes, 3, 1, 1),
                                       nn.ReLU(inplace=True),
-                                      nn.Conv3d(32, 1, kernel_size=3, padding=1, stride=1,bias=False))
+                                      nn.Conv3d(self.planes, 1, kernel_size=3, padding=1, stride=1,bias=False))
 
         self.disparityregression = disparityregression(self.maxdisp)
 
@@ -228,6 +230,11 @@ class PSMNet(nn.Module):
 
 
     def forward(self, left, right):
+        if self.downsample < 1.:
+            left_origin = left
+            right_origin = right
+            left = F.interpolate(left, scale_factor=self.downsample)
+            right = F.interpolate(right, scale_factor=self.downsample)
 
         refimg_fea     = self.feature_extraction(left)
         targetimg_fea  = self.feature_extraction(right)
@@ -282,6 +289,14 @@ class PSMNet(nn.Module):
         #while 'softmax(-c)' learned 'matching cost' as mentioned in the paper.
         #However, 'c' or '-c' do not affect the performance because feature-based cost volume provided flexibility.
         pred3 = self.disparityregression(pred3)
+
+        if self.downsample < 1.:
+            if self.training:
+                pred1 = torch.squeeze(F.interpolate(torch.unsqueeze(pred1, 1), size=[left_origin.size()[2],left_origin.size()[3]]), 1)
+                pred2 = torch.squeeze(F.interpolate(torch.unsqueeze(pred2, 1), size=[left_origin.size()[2],left_origin.size()[3]]), 1)
+                pred3 = torch.squeeze(F.interpolate(torch.unsqueeze(pred3, 1), size=[left_origin.size()[2],left_origin.size()[3]]), 1)
+            else:
+                pred3 = torch.squeeze(F.interpolate(torch.unsqueeze(pred3, 1), size=[left_origin.size()[2],left_origin.size()[3]]), 1)
 
         if self.training:
             return pred1, pred2, pred3

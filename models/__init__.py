@@ -32,6 +32,12 @@ from .fastd3 import PSMNet as fastd3
 from .fastd4 import PSMNet as fastd4
 from .fastd5 import PSMNet as fastd5
 from .fastd6 import PSMNet as fastd6
+from .faste1 import PSMNet as faste1
+from .faste2 import PSMNet as faste2
+from .faste3 import PSMNet as faste3
+from .faste4 import PSMNet as faste4
+from .faste5 import PSMNet as faste5
+from .faste6 import PSMNet as faste6
 
 def get_model(args):
     if args.model == 'stackhourglass':
@@ -104,6 +110,18 @@ def get_model(args):
         model = fastd5(args)
     elif args.model == 'fastd6':
         model = fastd6(args)
+    elif args.model == 'faste1':
+        model = faste1(args)
+    elif args.model == 'faste2':
+        model = faste2(args)
+    elif args.model == 'faste3':
+        model = faste3(args)
+    elif args.model == 'faste4':
+        model = faste4(args)
+    elif args.model == 'faste5':
+        model = faste5(args)
+    elif args.model == 'faste6':
+        model = faste6(args)
     else:
         raise ValueError('no such model')
     return model
