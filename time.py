@@ -1,7 +1,7 @@
 import argparse
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 import random
 import torch
@@ -200,7 +200,7 @@ def main():
                 trld.extend(trld15 + teld15)
 
     TimeImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(teli*64, teri*64, teld*64, training=False, with_cache=args.with_cache, dataset=args.dataset), 
+        DA.ImageFloder(teli*16, teri*16, teld*16, training=False, with_cache=args.with_cache, dataset=args.dataset), 
         batch_size=args.batch_size, shuffle=False, num_workers=5, drop_last=False)
 
     model = get_model(args)

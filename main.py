@@ -160,7 +160,7 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     #----
     optimizer.zero_grad()
     
-    if "fasta" in args.model or "fastc" in args.model or "fastd" in args.model or "faste" in args.model:
+    if "fasta" in args.model or "fastc" in args.model or "fastd" in args.model or "faste" in args.model or "fastf" in args.model:
         outputs = model(imgL,imgR)
         if args.loss_weights and epoch is not None:
             loss = 0.
