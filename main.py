@@ -179,6 +179,14 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     elif "fastb" in args.model:
         output = model(imgL,imgR)
         loss = F.smooth_l1_loss(output[mask], disp_true) 
+    elif "fastg" in args.model:
+        outputs = model(imgL,imgR)
+        residual = disp_true
+        loss = 0.
+        for output in outputs:
+            output = torch.squeeze(output,1)
+            loss += F.smooth_l1_loss(output[mask], residual)
+            residual = residual - output[mask]
     else:
         output1, output2, output3 = model(imgL,imgR)
         output1 = torch.squeeze(output1,1)
