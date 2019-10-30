@@ -42,6 +42,8 @@ from .fastf1 import PSMNet as fastf1
 from .fastf2 import PSMNet as fastf2
 from .fastf3 import PSMNet as fastf3
 from .fastg1 import PSMNet as fastg1
+from .fastg2 import PSMNet as fastg2
+from .fastg3 import PSMNet as fastg3
 
 def get_model(args):
     if args.model == 'stackhourglass':
@@ -134,6 +136,10 @@ def get_model(args):
         model = fastf3(args)
     elif args.model == 'fastg1':
         model = fastg1(args)
+    elif args.model == 'fastg2':
+        model = fastg2(args)
+    elif args.model == 'fastg3':
+        model = fastg3(args)
     else:
         raise ValueError('no such model')
     return model
