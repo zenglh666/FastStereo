@@ -51,9 +51,9 @@ class ImageFloder(data.Dataset):
         self.right = right
         self.disp_L = left_disparity
         self.loader = lambda path: Image.open(path).convert('RGB')
-        if dataset == 'flow':
+        if dataset == 'flow' or dataset == 'middlebury':
             self.dploader = lambda path: Image.fromarray(readPFM(path).astype(np.float32))
-        else:
+        elif dataset == 'kitti':
             self.dploader = lambda path: Image.open(path)
         self.training = training
 
@@ -112,10 +112,23 @@ class ImageFloder(data.Dataset):
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
             dataL = dataL.crop((x1, y1, x1 + tw, y1 + th))
             '''
-            w, h = left_img.size
-            left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
-            right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
-            dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
+            
+            if self.dataset == "middlebury":
+                w, h = left_img.size
+                left_img = left_img.resize((w // 4, h // 4), Image.ANTIALIAS)
+                right_img = right_img.resize((w // 4, h // 4), Image.ANTIALIAS)
+                dataL = dataL.resize((w // 4, h // 4), Image.ANTIALIAS)
+                w, h = left_img.size
+                desire_w = w + 32 -  w % 32
+                desire_h = h + 32 - h % 32
+                left_img = left_img.crop((w-desire_w, h-desire_h, w, h))
+                right_img = right_img.crop((w-desire_w, h-desire_h, w, h))
+                dataL = dataL.crop((w-desire_w, h-desire_h, w, h))
+            else:
+                w, h = left_img.size
+                left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+                right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+                dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
             w, h = left_img.size
             left_img = ImageOps.expand(left_img, border=8, fill=0)
             right_img = ImageOps.expand(right_img, border=8, fill=0)
@@ -126,14 +139,28 @@ class ImageFloder(data.Dataset):
             right_img = right_img.crop((x1, y1, x1 + w, y1 + h))
             dataL = dataL.crop((x1, y1, x1 + w, y1 + h))
         else:
-            w, h = left_img.size
-            left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
-            right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
-            dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
+            if self.dataset == "middlebury":
+                w, h = left_img.size
+                left_img = left_img.resize((w // 4, h // 4), Image.ANTIALIAS)
+                right_img = right_img.resize((w // 4, h // 4), Image.ANTIALIAS)
+                dataL = dataL.resize((w // 4, h // 4), Image.ANTIALIAS)
+                w, h = left_img.size
+                desire_w = w + 32 -  w % 32
+                desire_h = h + 32 - h % 32
+                left_img = left_img.crop((w-desire_w, h-desire_h, w, h))
+                right_img = right_img.crop((w-desire_w, h-desire_h, w, h))
+                dataL = dataL.crop((w-desire_w, h-desire_h, w, h))
+            else:
+                w, h = left_img.size
+                left_img = left_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+                right_img = right_img.crop((w-self.desire_w, h-self.desire_h, w, h))
+                dataL = dataL.crop((w-self.desire_w, h-self.desire_h, w, h))
 
         left_img   = np.array(left_img, dtype=np.float32)
         right_img  = np.array(right_img, dtype=np.float32)
         dataL = np.array(dataL, dtype=np.float32)
+        if self.dataset == "middlebury":
+            dataL = dataL / 4.
         return left_img, right_img, dataL
 
     def __len__(self):

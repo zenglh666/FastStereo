@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import random
 import torch
 import torch.nn as nn
@@ -21,6 +21,8 @@ from dataloader import DataLoader as DA
 from models import get_model
 from PIL import Image
 from PIL import ImageOps
+import struct
+import re
 
 parser = argparse.ArgumentParser(description='FS')
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -139,6 +141,53 @@ def infer(model, args, imgL, imgR):
     pred_disp = output.data.cpu().numpy()
     return pred_disp
 
+def writePFM(file, disp):
+    height = disp.shape[0]
+    width = disp.shape[1]
+    scale = float(-1)
+
+    disp = np.flipud(disp)
+    file.write(b'Pf\n')
+    file.write(('%d %d\n' % (width, height)).encode('utf-8'))
+    file.write(('%f\n' % scale).encode('utf-8'))
+
+    for x in disp.flatten():
+        file.write(struct.pack('f', float(x)))
+
+def readPFM(file):
+    color = None
+    width = None
+    height = None
+    scale = None
+    endian = None
+
+    header = file.readline().decode().rstrip()
+    if header == 'PF':
+        color = True
+    elif header == 'Pf':
+        color = False
+    else:
+        raise Exception('Not a PFM file.')
+
+    dim_match = re.match(r'^(\d+)\s(\d+)\s$', file.readline().decode())
+    if dim_match:
+        width, height = map(int, dim_match.groups())
+    else:
+        raise Exception('Malformed PFM header.')
+
+    scale = float(file.readline().decode().rstrip())
+    if scale < 0: # little-endian
+        endian = '<'
+        scale = -scale
+    else:
+        endian = '>' # big-endian
+
+    data = np.frombuffer(file.read(), endian + 'f')
+    shape = (height, width, 3) if color else (height, width)
+
+    data = np.reshape(data, shape)
+    data = np.flipud(data)
+    return data
 
 def main():
     args = parser.parse_args()
@@ -171,7 +220,10 @@ def main():
         if args.cuda:
             torch.cuda.manual_seed(args.seed)
 
-    teli, teri = lt.list_kitti_test_file(args.datapath, args.date)
+    if args.dataset == 'kitti':
+        teli, teri = lt.list_kitti_test_file(args.datapath, args.date)
+    elif args.dataset == 'middlebury':
+        teli, teri = lt.list_middlebury_test_file(args.datapath)
 
     model = get_model(args)
 
@@ -187,13 +239,25 @@ def main():
     all_time = 0.
 
     for left, right in zip(teli, teri):
+        if args.dataset == "kitti":
+            imgL = np.array(Image.open(left)).astype('float32')
+            imgR = np.array(Image.open(right)).astype('float32')
 
-        imgL = np.array(Image.open(left)).astype('float32')
-        imgR = np.array(Image.open(right)).astype('float32')
+            # pad to (384, 1248)
+            top_pad = 384-imgL.shape[0]
+            left_pad = 1248-imgL.shape[1]
+        elif args.dataset == "middlebury":
+            imgL = Image.open(left)
+            imgR = Image.open(right)
+            w, h = imgL.size
+            imgL = imgL.resize((w // 4, h // 4), Image.ANTIALIAS)
+            imgR = imgR.resize((w // 4, h // 4), Image.ANTIALIAS)
+            w, h = imgL.size
+            top_pad = 32 -  h % 32
+            left_pad = 32 -  w % 32
+            imgL = np.array(imgL)
+            imgR = np.array(imgR)
 
-        # pad to (384, 1248)
-        top_pad = 384-imgL.shape[0]
-        left_pad = 1248-imgL.shape[1]
         imgL = np.lib.pad(imgL,((top_pad,0),(0,left_pad),(0,0)),mode='constant',constant_values=0)
         imgR = np.lib.pad(imgR,((top_pad,0),(0,left_pad),(0,0)),mode='constant',constant_values=0)
 
@@ -202,11 +266,24 @@ def main():
 
         start_time = time.time()
         pred_disp = infer(model, args, imgL, imgR)
-        all_time += time.time() - start_time
+        end_time = time.time() - start_time
+        all_time += end_time
 
         img = pred_disp[top_pad:,:-left_pad]
-        img = Image.fromarray((img*256).astype('uint16'))
-        img.save(os.path.join(savepath, left.split('/')[-1]))
+
+        if args.dataset == "kitti":
+            img = Image.fromarray((img*256).astype('uint16'))
+            img.save(os.path.join(savepath, left.split('/')[-1]))
+        elif args.dataset == "middlebury":
+            file = left.replace('/im0.png', '')
+            file = file.replace('MiddEval3', 'results')
+            if not os.path.exists(file):
+                os.makedirs(file)
+            with open(os.path.join(file, 'disp0CRAR.pfm'), 'wb') as f:
+                writePFM(f, img)
+            with open(os.path.join(file, 'timeCRAR.txt'), 'wb') as f:
+                f.write(('%f' % end_time).encode('utf-8'))
+
     logger.info('per example time = %.5f' % (all_time / len(teli)))
 
 if __name__ == '__main__':

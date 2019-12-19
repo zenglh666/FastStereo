@@ -237,6 +237,16 @@ def test(model, args, imgL, imgR, disp_true):
         loss = torch.sum(correct.float()).item()
         num = torch.sum(mask.float()).item()
 
+    elif args.dataset == "middlebury":
+        #computing 2-px error#
+        disp_true = disp_true[mask]
+        pred_disp = torch.squeeze(pred_disp, 1)
+        disp = torch.abs(disp_true - pred_disp[mask])
+        correct = disp < 2
+
+        loss = torch.sum(correct.float()).item()
+        num = torch.sum(mask.float()).item()
+
     return loss, num
 
 def main():
@@ -272,8 +282,11 @@ def main():
 
     if args.dataset == "flow":
         trli, trri, trld, teli, teri, teld = lt.list_flow_file(args.datapath)
-    else:
+    elif args.dataset == "kitti":
         trli, trri, trld, teli, teri, teld = lt.list_kitti_file(args.datapath, args.date)
+    elif args.dataset == "middlebury":
+        trli, trri, trld, teli, teri, teld = lt.list_middlebury_file(args.datapath)
+        assert args.batch_size == 1
     if args.all_train:
         trli.extend(teli)
         trri.extend(teri)
@@ -281,11 +294,11 @@ def main():
 
     TrainImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(trli, trri, trld, training=args.no_train_aug, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size, shuffle=True, num_workers=5, drop_last=False)
+        batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(
         DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size, shuffle=False, num_workers=5, drop_last=False)
+        batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
     model = get_model(args)
 
@@ -341,7 +354,7 @@ def main():
             total_test_loss += loss
             total_test_num += num
 
-        if args.dataset == "kitti":
+        if args.dataset == "kitti" or args.dataset == "middlebury":
             total_test_loss = (1 - total_test_loss / total_test_num) * 100.
         else:
             total_test_loss = total_test_loss / total_test_num
