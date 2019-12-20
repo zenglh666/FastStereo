@@ -287,7 +287,17 @@ def main():
     if args.dataset == "flow":
         trli, trri, trld, teli, teri, teld = lt.list_flow_file(args.datapath)
     elif args.dataset == "kitti":
-        trli, trri, trld, teli, teri, teld = lt.list_kitti_file(args.datapath, args.date)
+        if args.all_train:
+            trli, trri, trld, teli, teri, teld = lt.list_kitti_file(os.path.join(args.datapath, 'kitti2015','training'), '2015')
+            trli2, trri2, trld2, teli2, teri2, teld2 = lt.list_kitti_file(os.path.join(args.datapath, 'kitti2012','train_194'), '2012')
+            trli.extend(trli2)
+            trri.extend(trri2)
+            trld.extend(trld2)
+            teli.extend(teli2)
+            teri.extend(teri2)
+            teld.extend(teld2)
+        else:
+            trli, trri, trld, teli, teri, teld = lt.list_kitti_file(args.datapath, args.date)
     elif args.dataset == "middlebury":
         trli, trri, trld, teli, teri, teld = lt.list_middlebury_file(args.datapath)
         assert args.batch_size == 1
