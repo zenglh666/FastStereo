@@ -46,7 +46,7 @@ def readPFM(file):
     return data
 
 class ImageFloder(data.Dataset):
-    def __init__(self, left, right, left_disparity, training, with_cache=False, dataset='flow'):
+    def __init__(self, left, right, left_disparity, training, down_sample=1, with_cache=False, dataset='flow'):
         self.left = left
         self.right = right
         self.disp_L = left_disparity
@@ -56,6 +56,7 @@ class ImageFloder(data.Dataset):
         elif dataset == 'kitti':
             self.dploader = lambda path: Image.open(path)
         self.training = training
+        self.down_sample = down_sample
 
         self.with_cache = with_cache
         if with_cache:
@@ -115,9 +116,9 @@ class ImageFloder(data.Dataset):
             
             if self.dataset == "middlebury":
                 w, h = left_img.size
-                left_img = left_img.resize((w // 4, h // 4), Image.ANTIALIAS)
-                right_img = right_img.resize((w // 4, h // 4), Image.ANTIALIAS)
-                dataL = dataL.resize((w // 4, h // 4), Image.ANTIALIAS)
+                left_img = left_img.resize((w // self.down_sample, h // self.down_sample), Image.ANTIALIAS)
+                right_img = right_img.resize((w // self.down_sample, h // self.down_sample), Image.ANTIALIAS)
+                dataL = dataL.resize((w // self.down_sample, h // self.down_sample), Image.ANTIALIAS)
                 w, h = left_img.size
                 desire_w = w + 32 -  w % 32
                 desire_h = h + 32 - h % 32
@@ -141,9 +142,9 @@ class ImageFloder(data.Dataset):
         else:
             if self.dataset == "middlebury":
                 w, h = left_img.size
-                left_img = left_img.resize((w // 4, h // 4), Image.ANTIALIAS)
-                right_img = right_img.resize((w // 4, h // 4), Image.ANTIALIAS)
-                dataL = dataL.resize((w // 4, h // 4), Image.ANTIALIAS)
+                left_img = left_img.resize((w // self.down_sample, h // self.down_sample), Image.ANTIALIAS)
+                right_img = right_img.resize((w // self.down_sample, h // self.down_sample), Image.ANTIALIAS)
+                dataL = dataL.resize((w // self.down_sample, h // self.down_sample), Image.ANTIALIAS)
                 w, h = left_img.size
                 desire_w = w + 32 -  w % 32
                 desire_h = h + 32 - h % 32
@@ -159,8 +160,6 @@ class ImageFloder(data.Dataset):
         left_img   = np.array(left_img, dtype=np.float32)
         right_img  = np.array(right_img, dtype=np.float32)
         dataL = np.array(dataL, dtype=np.float32)
-        if self.dataset == "middlebury":
-            dataL = dataL / 4.
         return left_img, right_img, dataL
 
     def __len__(self):

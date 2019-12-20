@@ -89,6 +89,9 @@ parser.add_argument('--loss-weights', action='store_true', default=False,
 parser.add_argument('--no-train-aug', action='store_false', default=True,
                     help='no-train-aug')
 
+parser.add_argument('--down-sample', type=int, default=1,
+                    help='downsample')
+
 def process(img, cuda):
     img = img.transpose(1,3).transpose(2,3).contiguous()
     mean = torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
@@ -250,8 +253,8 @@ def main():
             imgL = Image.open(left)
             imgR = Image.open(right)
             w, h = imgL.size
-            imgL = imgL.resize((w // 4, h // 4), Image.ANTIALIAS)
-            imgR = imgR.resize((w // 4, h // 4), Image.ANTIALIAS)
+            imgL = imgL.resize((w // args.down_sample, h // args.down_sample), Image.ANTIALIAS)
+            imgR = imgR.resize((w // args.down_sample, h // args.down_sample), Image.ANTIALIAS)
             w, h = imgL.size
             top_pad = 32 -  h % 32
             left_pad = 32 -  w % 32

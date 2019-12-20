@@ -86,7 +86,7 @@ parser.add_argument('--sequence', type=int, default=3,
 parser.add_argument('--flood', type=int, default=4,
                     help='flood')
 
-parser.add_argument('--downsample', type=float, default=1.,
+parser.add_argument('--down-sample', type=int, default=1,
                     help='downsample')
 
 def process(img, cuda):
@@ -133,6 +133,8 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
     imgR = process2(imgR, args.cuda)
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
+    if args.down_sample > 1:
+        disp_true = disp_true.div(float(args.down_sample))
 
     if args.source_drop > 0.:
         imgL = torch.nn.functional.dropout(imgL, p=args.source_drop)
@@ -211,6 +213,8 @@ def test(model, args, imgL, imgR, disp_true):
     imgR = process2(imgR, args.cuda)
     if args.dataset == 'kitti':
         disp_true = disp_true.div(256)
+    elif args.dataset == 'middlebury':
+        disp_true = disp_true.div(float(args.down_sample))
 
     with torch.no_grad():
         output3 = model(imgL,imgR)
@@ -293,12 +297,12 @@ def main():
         trld.extend(teld)
 
     TrainImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(trli, trri, trld, training=args.no_train_aug, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
+        DA.ImageFloder(trli, trri, trld, down_sample=args.down_sample, training=args.no_train_aug, with_cache=args.with_cache, dataset=args.dataset), 
+        batch_size=args.batch_size, shuffle=True, num_workers=5, drop_last=False)
 
     TestImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(teli, teri, teld, training=False, with_cache=args.with_cache, dataset=args.dataset), 
-        batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
+        DA.ImageFloder(teli, teri, teld, down_sample=args.down_sample, training=False, with_cache=args.with_cache, dataset=args.dataset), 
+        batch_size=args.batch_size, shuffle=False, num_workers=5, drop_last=False)
 
     model = get_model(args)
 

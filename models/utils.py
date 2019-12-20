@@ -193,8 +193,10 @@ class disparityregression(nn.Module):
     def __init__(self, maxdisp):
         super(disparityregression, self).__init__()
         self.maxdisp = maxdisp
-        self.disp = nn.Parameter(torch.Tensor(np.reshape(np.array(range(self.maxdisp)),[1,self.maxdisp,1,1])), requires_grad=False)
+        self.disp = nn.Parameter(torch.Tensor(np.reshape(np.array(range(24)),[1,24,1,1])), requires_grad=False)
+        self.disp2 = torch.Tensor(np.reshape(np.array(range(self.maxdisp)),[1,self.maxdisp,1,1]))
 
     def forward(self, x):
-        out = torch.sum(x * self.disp, 1)
+        self.disp2 = self.disp2.cuda(device=x.device)
+        out = torch.sum(x * self.disp2, 1)
         return out
