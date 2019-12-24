@@ -136,8 +136,6 @@ def runtime(model, args, imgL, imgR, disp_true):
 
     imgL = process2(imgL, args.cuda)
     imgR = process2(imgR, args.cuda)
-    if args.dataset == 'kitti':
-        disp_true = disp_true.div(256)
 
     torch.cuda.synchronize()
     start_time = time.time()
@@ -181,26 +179,13 @@ def main():
 
     if args.dataset == "flow":
         trli, trri, trld, teli, teri, teld = lt.list_flow_file(args.datapath)
-
-    else:
-        if args.datapath_ext == "":
-            trli, trri, trld, teli, teri, teld = lt.list_kitti_file(args.datapath, args.date)
-        else:
-            trli15, trri15, trld15, teli15, teri15, teld15 = lt.list_kitti_file(args.datapath, '2015')
-            trli12, trri12, trld12, teli12, teri12, teld12 = lt.list_kitti_file(args.datapath_ext, '2012')
-            if args.date == '2015':
-                trli, trri, trld, teli, teri, teld = trli15, trri15, trld15, teli15, teri15, teld15
-                trli.extend(trli12 + teli12)
-                trri.extend(trri12 + teri12)
-                trld.extend(trld12 + teld12)
-            else:
-                trli, trri, trld, teli, teri, teld = trli12, trri12, trld12, teli12, teri12, teld12
-                trli.extend(trli15 + teli15)
-                trri.extend(trri15 + teri15)
-                trld.extend(trld15 + teld15)
+    elif args.dataset == "kitti":
+        trli, trri, trld, teli, teri, teld = lt.list_kitti_file(args.datapath, args.date)
+    elif args.dataset == "middlebury":
+        trli, trri, trld, teli, teri, teld = lt.list_middlebury_file(args.datapath)
 
     TimeImgLoader = torch.utils.data.DataLoader(
-        DA.ImageFloder(teli*16, teri*16, teld*16, training=False, with_cache=args.with_cache, dataset=args.dataset), 
+        DA.ImageFloder(teli*16, teri*16, teld*16, training=False, args=args), 
         batch_size=args.batch_size, shuffle=False, num_workers=5, drop_last=False)
 
     model = get_model(args)

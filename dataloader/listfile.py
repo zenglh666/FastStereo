@@ -141,18 +141,28 @@ def list_kitti_test_file(filepath, date):
 
 def list_middlebury_file(filepath):
     train_path = os.path.join(filepath, 'MiddEval3/trainingF')
-    val_path = os.path.join(filepath, 'extra')
+    extra_path = os.path.join(filepath, 'extra')
+    extra_path2 = os.path.join(filepath, 'extra2')
 
     train = [path for path in os.listdir(train_path) if path.find('.') <= -1]
-    val = [path for path in os.listdir(val_path) if path.find('.') <= -1]
+    extra = [path for path in os.listdir(extra_path) if path.find('.') <= -1]
+    extra2 = [path for path in os.listdir(extra_path2) if path.find('.') <= -1]
 
     left_train  = [os.path.join(train_path, path, 'im0.png') for path in train]
     right_train = [os.path.join(train_path, path, 'im1.png') for path in train]
     disp_train_L = [os.path.join(train_path, path, 'disp0GT.pfm') for path in train]
 
-    left_val  = [os.path.join(val_path, path, 'im0.png') for path in val]
-    right_val = [os.path.join(val_path, path, 'im1.png') for path in val]
-    disp_val_L = [os.path.join(val_path, path, 'disp0.pfm') for path in val]
+    left_val, right_val, disp_val_L = [], [], []
+    for right_img in ['im1.png', 'im1E.png', 'im1L.png']:
+        left_val.extend([os.path.join(extra_path, path, 'im0.png') for path in extra])
+        right_val.extend([os.path.join(extra_path, path, right_img) for path in extra])
+        disp_val_L.extend([os.path.join(extra_path, path, 'disp0.pfm') for path in extra])
+
+    for illu in ['Illum1', 'Illum2', 'Illum3']:
+        for expo in ['Exp0', 'Exp1', 'Exp2']:
+            left_val.extend([os.path.join(extra_path2, path, illu, expo, 'view1.png') for path in extra2])
+            right_val.extend([os.path.join(extra_path2, path, illu, expo, 'view5.png') for path in extra2])
+            disp_val_L.extend([os.path.join(extra_path2, path, 'disp1.png') for path in extra2])
 
     return left_train, right_train, disp_train_L, left_val, right_val, disp_val_L
 
