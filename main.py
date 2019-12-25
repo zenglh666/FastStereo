@@ -72,6 +72,8 @@ parser.add_argument('--all-train', action='store_true', default=False,
                     help='no-train-aug')
 parser.add_argument('--crop-training', action='store_true', default=False,
                     help='no-train-aug')
+parser.add_argument('--clip-gradient', action='store_true', default=False,
+                    help='no-train-aug')
 
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
@@ -196,10 +198,16 @@ def train(model, optimizer, args, imgL,imgR, disp_true, epoch=None):
         loss += 0.7*F.smooth_l1_loss(output2[mask], disp_true) 
         loss += F.smooth_l1_loss(output3[mask], disp_true) 
 
-    loss.backward()
-    optimizer.step()
+    if np.isnan(loss.data.item()):
+        return 0.
+    else:
+        loss.backward()
+        if args.clip_gradient:
+            for group in optimizer.param_groups:
+                torch.nn.utils.clip_grad_value_(group["params"], 0.1/args.learning_rate)
+        optimizer.step()
 
-    return loss.data.item()
+        return loss.data.item()
 
 def test(model, args, imgL, imgR, disp_true):
     model.eval()
