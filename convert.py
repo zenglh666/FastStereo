@@ -4,6 +4,7 @@ import cv2
 from io import BytesIO
 import numpy as np
 import re
+from PIL import Image
 
 def readPFM(file):
     color = None
@@ -40,7 +41,7 @@ def readPFM(file):
     data = np.flipud(data)
     return data
 
-def convert(source, image_name, max_disp=256):
+def convert_color(source, max_disp=256):
     if isinstance(source, str):
         if 'pfm' in file_name:
             with open(file_name, 'rb') as f:
@@ -48,14 +49,35 @@ def convert(source, image_name, max_disp=256):
         elif 'png' in file_name:
             data = np.asarray(Image.open(file_name)).astype(np.float32) / 256.
     elif isinstance(source, np.ndarray):
-        data = source
-    R = np.minimum(data, max_disp) / max_disp * 256
-    R = np.expand_dims(R.astype(np.uint8), -1)
-    B = (max_disp - np.minimum(data, max_disp)) / max_disp * 256
-    B = np.expand_dims(B.astype(np.uint8), -1)
-    G = np.zeros_like(R)
-    image = np.concatenate([B, G, R], axis=-1)
-    cv2.imwrite(image_name, image)
+        data = source.astype(np.float32)
+    data = np.minimum(data, max_disp)
+    #data = data - np.min(data)
+    data = data / np.max(data) * 256
+    data = np.expand_dims(data, -1)
+    R = np.maximum(data , 0).astype(np.uint8)
+    B = np.maximum((256 - data) ,  0).astype(np.uint8)
+    #G = np.maximum((128 - np.abs(128 - data)) * 2, 0).astype(np.uint8)
+    G = np.zeros_like(B)
+    image = np.concatenate([R, G, B], axis=-1)
+    return image
+
+def convert_illum(source, max_disp=256):
+    if isinstance(source, str):
+        if 'pfm' in file_name:
+            with open(file_name, 'rb') as f:
+                data = readPFM(f).astype(np.float32)
+        elif 'png' in file_name:
+            data = np.asarray(Image.open(file_name)).astype(np.float32) / 256.
+    elif isinstance(source, np.ndarray):
+        data = source.astype(np.float32)
+    data = np.minimum(data, 256).astype(np.uint8)
+    data = np.expand_dims(data, -1)
+    image = np.concatenate([data, data, data], axis=-1)
+    image[image > 4] = 255
+    image[image <= 4] = 0
+    return image
+    
 
 if __name__ == '__main__':
-   convert("input.png", "output.png")
+   data = convert("input.png")
+   Image.fromarray(data).save("output.png")

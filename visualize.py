@@ -147,7 +147,7 @@ def infer(model, args, imgL, imgR):
         pred_disp.append(output.data.cpu().numpy())
     return pred_disp
 
-def visual(left, right):
+def visual(left, right, disp):
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.savemodel == "":
@@ -221,14 +221,24 @@ def visual(left, right):
     end_time = time.time() - start_time
     all_time += end_time
 
+    with open(disp, 'rb') as f:
+        disp_img = Image.fromarray(readPFM(f).astype(np.float32))
+        w, h = disp_img.size
+        disp_img = disp_img.resize((w // args.down_sample, h // args.down_sample), Image.ANTIALIAS)
+        disp = np.array(disp_img).astype(np.float32) / 2
+
     for index, pred_disp in enumerate(pred_disps):
         img = pred_disp[top_pad:,:-left_pad]
-        convert(img, os.path.join(savepath, str(index) + '_' + left.split('/')[-1]), args.maxdisp)
+        error_map = convert_illum(np.abs(disp - img), args.maxdisp)
+        disp_map = convert_color(img, args.maxdisp)
+        final = np.maximum(error_map, disp_map)
+        Image.fromarray(final).save(os.path.join(savepath, str(index) + '_' + left.split('/')[-1]))
 
 if __name__ == '__main__':
-    left = '/home/zenglh/MiddEval3/trainingF/Adirondack/im0.png'
-    right = '/home/zenglh/MiddEval3/trainingF/Adirondack/im1.png'
-    visual(left, right)
+    left = '/home/zenglh/MiddEval3/trainingF/Motorcycle/im0.png'
+    right = '/home/zenglh/MiddEval3/trainingF/Motorcycle/im1.png'
+    disp = '/home/zenglh/MiddEval3/trainingF/Motorcycle/disp0GT.pfm'
+    visual(left, right, disp)
 
 
 
