@@ -158,13 +158,12 @@ def list_middlebury_file(filepath):
         right_val.extend([os.path.join(extra_path, path, right_img) for path in extra])
         disp_val_L.extend([os.path.join(extra_path, path, 'disp0.pfm') for path in extra])
 
-    for illu in ['Illum1', 'Illum2', 'Illum3']:
-        for expo in ['Exp0', 'Exp1', 'Exp2']:
-            left_val.extend([os.path.join(extra_path2, path, illu, expo, 'view1.png') for path in extra2])
-            right_val.extend([os.path.join(extra_path2, path, illu, expo, 'view5.png') for path in extra2])
-            disp_val_L.extend([os.path.join(extra_path2, path, 'disp1.png') for path in extra2])
+    for illu, expo in [('Illum1', 'Exp1'), ('Illum1', 'Exp2'), ('Illum3', 'Exp1')]:
+        left_val.extend([os.path.join(extra_path2, path, 'Illum1', 'Exp1', 'view1.png') for path in extra2])
+        right_val.extend([os.path.join(extra_path2, path, illu, expo, 'view5.png') for path in extra2])
+        disp_val_L.extend([os.path.join(extra_path2, path, 'disp1.png') for path in extra2])
 
-    return left_train, right_train, disp_train_L, left_val, right_val, disp_val_L
+    return left_val, right_val, disp_val_L, left_train, right_train, disp_train_L
 
 def list_middlebury_test_file(filepath):
     train_path = os.path.join(filepath, 'MiddEval3/trainingF')
