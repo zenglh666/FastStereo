@@ -43,41 +43,43 @@ def readPFM(file):
 
 def convert_color(source, max_disp=256):
     if isinstance(source, str):
-        if 'pfm' in file_name:
-            with open(file_name, 'rb') as f:
+        if 'pfm' in source:
+            with open(source, 'rb') as f:
                 data = readPFM(f).astype(np.float32)
-        elif 'png' in file_name:
-            data = np.asarray(Image.open(file_name)).astype(np.float32) / 256.
+        elif 'png' in source:
+            data = np.asarray(Image.open(source)).astype(np.float32) / 256.
     elif isinstance(source, np.ndarray):
         data = source.astype(np.float32)
+    block = np.expand_dims(data < max_disp, -1)
     data = np.minimum(data, max_disp)
-    #data = data - np.min(data)
-    data = data / np.max(data) * 256
-    data = np.expand_dims(data, -1)
-    R = np.maximum(data , 0).astype(np.uint8)
-    B = np.maximum((256 - data) ,  0).astype(np.uint8)
-    #G = np.maximum((128 - np.abs(128 - data)) * 2, 0).astype(np.uint8)
-    G = np.zeros_like(B)
-    image = np.concatenate([R, G, B], axis=-1)
-    return image
+    data = data - np.min(data)
+    data = data / np.max(data)
+    data = np.expand_dims(data, -1) / 1.15 + 0.1
+    B = np.minimum(np.maximum((1.5 - np.abs(0.25 - data) * 4), 0), 1.)
+    R = np.minimum(np.maximum((1.5 - np.abs(0.75 - data) * 4),  0), 1.)
+    G = np.minimum(np.maximum((1.5 - np.abs(0.5 - data) * 4), 0), 1.)
+    #G = np.zeros_like(B)
+    image = np.concatenate([R, G, B], axis=-1) * 255. * block.astype(np.float32)
+    #image = image / np.sum(image, axis=2,  keepdims=True) * 256
+    return image.astype(np.uint8)
 
 def convert_illum(source, max_disp=256):
     if isinstance(source, str):
-        if 'pfm' in file_name:
-            with open(file_name, 'rb') as f:
+        if 'pfm' in source:
+            with open(source, 'rb') as f:
                 data = readPFM(f).astype(np.float32)
-        elif 'png' in file_name:
-            data = np.asarray(Image.open(file_name)).astype(np.float32) / 256.
+        elif 'png' in source:
+            data = np.asarray(Image.open(source)).astype(np.float32) / 256.
     elif isinstance(source, np.ndarray):
         data = source.astype(np.float32)
-    data = np.minimum(data, 256).astype(np.uint8)
+    data = np.minimum(data, 256)
     data = np.expand_dims(data, -1)
     image = np.concatenate([data, data, data], axis=-1)
     image[image > 4] = 255
     image[image <= 4] = 0
-    return image
+    return image.astype(np.uint8)
     
 
 if __name__ == '__main__':
-   data = convert("input.png")
-   Image.fromarray(data).save("output.png")
+   data = convert_color("/home/zenglh/disp0CRAR.pfm")
+   Image.fromarray(data).save("/home/zenglh/output.png")

@@ -74,6 +74,8 @@ parser.add_argument('--crop-training', action='store_true', default=False,
                     help='no-train-aug')
 parser.add_argument('--clip-gradient', action='store_true', default=False,
                     help='no-train-aug')
+parser.add_argument('--time-out', action='store_true', default=False,
+                    help='no-train-aug')
 
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
@@ -253,7 +255,10 @@ def test(model, args, imgL, imgR, disp_true):
         loss = torch.sum(correct.float()).item()
         num = torch.sum(mask.float()).item()
 
-    return loss, num
+    if np.isnan(loss):
+        return 0., num
+    else:
+        return loss, num
 
 def main():
     args = parser.parse_args()
@@ -280,6 +285,11 @@ def main():
 
     for k,v in sorted(vars(args).items()):
         logger.info('%s - %s' % (k, v))
+
+    if args.time_out:
+        logger.info('start sleeping')
+        time.sleep(3600)
+        logger.info('end sleeping')
 
     if args.seed != 0:
         torch.manual_seed(args.seed)
